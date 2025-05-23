@@ -914,13 +914,17 @@ class GoogleLoginView(APIView):
             user = User()
             user.email = data["email"]
             user.profile_pic = data["picture"]
-            # provider random default password
-            user.password = make_password(BaseUserManager().make_random_password())
-            user.email = data["email"]
+            # Generate random password
+            import string
+            import random
+            def generate_random_password(length=10):
+                chars = string.ascii_letters + string.digits
+                return ''.join(random.choice(chars) for _ in range(length))
+            
+            user.password = make_password(generate_random_password())
             user.save()
-        token = RefreshToken.for_user(
-            user
-        )  # generate token without username & password
+
+        token = RefreshToken.for_user(user)  # generate token without username & password
         response = {}
         response["username"] = user.email
         response["access_token"] = str(token.access_token)
