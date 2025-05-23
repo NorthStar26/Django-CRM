@@ -1,7 +1,7 @@
 import json
 import secrets
 from multiprocessing import context
-from re import template
+# from re import template
 
 import requests
 from django.contrib.auth.base_user import BaseUserManager
@@ -24,7 +24,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
-#from common.external_auth import CustomDualAuthentication
+
+# from common.external_auth import CustomDualAuthentication
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.pagination import LimitOffsetPagination
@@ -41,6 +42,7 @@ from cases.serializer import CaseSerializer
 from common import serializer, swagger_params1
 from common.models import APISettings, Document, Org, Profile, User
 from common.serializer import *
+
 # from common.serializer import (
 #     CreateUserSerializer,
 #     PasswordChangeSerializer,
@@ -66,7 +68,6 @@ from teams.serializer import TeamsSerializer
 
 
 class GetTeamsAndUsersView(APIView):
-
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
@@ -74,9 +75,9 @@ class GetTeamsAndUsersView(APIView):
         data = {}
         teams = Teams.objects.filter(org=request.profile.org).order_by("-id")
         teams_data = TeamsSerializer(teams, many=True).data
-        profiles = Profile.objects.filter(is_active=True, org=request.profile.org).order_by(
-            "user__email"
-        )
+        profiles = Profile.objects.filter(
+            is_active=True, org=request.profile.org
+        ).order_by("user__email")
         profiles_data = ProfileSerializer(profiles, many=True).data
         data["teams"] = teams_data
         data["profiles"] = profiles_data
@@ -84,9 +85,12 @@ class GetTeamsAndUsersView(APIView):
 
 
 class UsersListView(APIView, LimitOffsetPagination):
-
     permission_classes = (IsAuthenticated,)
-    @extend_schema(parameters=swagger_params1.organization_params,request=UserCreateSwaggerSerializer)
+
+    @extend_schema(
+        parameters=swagger_params1.organization_params,
+        request=UserCreateSwaggerSerializer,
+    )
     def post(self, request, format=None):
         print(request.profile.role, request.user.is_superuser)
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
@@ -97,7 +101,9 @@ class UsersListView(APIView, LimitOffsetPagination):
         else:
             params = request.data
             if params:
-                user_serializer = CreateUserSerializer(data=params, org=request.profile.org)
+                user_serializer = CreateUserSerializer(
+                    data=params, org=request.profile.org
+                )
                 address_serializer = BillingAddressSerializer(data=params)
                 profile_serializer = CreateProfileSerializer(data=params)
                 data = {}
@@ -138,7 +144,6 @@ class UsersListView(APIView, LimitOffsetPagination):
                         {"error": False, "message": "User Created Successfully"},
                         status=status.HTTP_201_CREATED,
                     )
-
 
     @extend_schema(parameters=swagger_params1.user_list_params)
     def get(self, request, format=None):
@@ -226,9 +231,9 @@ class UserDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        assigned_data = Profile.objects.filter(org=request.profile.org, is_active=True).values(
-            "id", "user__email"
-        )
+        assigned_data = Profile.objects.filter(
+            org=request.profile.org, is_active=True
+        ).values("id", "user__email")
         context = {}
         context["profile_obj"] = ProfileSerializer(profile_obj).data
         opportunity_list = Opportunity.objects.filter(assigned_to=profile_obj)
@@ -248,7 +253,11 @@ class UserDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    @extend_schema(tags=["users"],parameters=swagger_params1.organization_params, request=UserCreateSwaggerSerializer)
+    @extend_schema(
+        tags=["users"],
+        parameters=swagger_params1.organization_params,
+        request=UserCreateSwaggerSerializer,
+    )
     def put(self, request, pk, format=None):
         params = request.data
         profile = self.get_object(pk)
@@ -302,9 +311,7 @@ class UserDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    @extend_schema(
-        tags=["users"],parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             return Response(
@@ -328,7 +335,6 @@ class UserDetailView(APIView):
 
 # check_header not working
 class ApiHomeView(APIView):
-
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(parameters=swagger_params1.organization_params)
@@ -342,7 +348,8 @@ class ApiHomeView(APIView):
 
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
             accounts = accounts.filter(
-                Q(assigned_to=self.request.profile) | Q(created_by=self.request.profile.user)
+                Q(assigned_to=self.request.profile)
+                | Q(created_by=self.request.profile.user)
             )
             contacts = contacts.filter(
                 Q(assigned_to__id__in=self.request.profile)
@@ -369,7 +376,7 @@ class ApiHomeView(APIView):
 
 
 class OrgProfileCreateView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     model1 = Org
@@ -379,11 +386,11 @@ class OrgProfileCreateView(APIView):
 
     @extend_schema(
         description="Organization and profile Creation api",
-        request=OrgProfileCreateSerializer
+        request=OrgProfileCreateSerializer,
     )
     def post(self, request, format=None):
         data = request.data
-        data['api_key'] = secrets.token_hex(16)
+        data["api_key"] = secrets.token_hex(16)
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             org_obj = serializer.save()
@@ -392,7 +399,7 @@ class OrgProfileCreateView(APIView):
             profile_obj = self.model2.objects.create(user=request.user, org=org_obj)
             # now the current user is the admin of the newly created organisation
             profile_obj.is_organization_admin = True
-            profile_obj.role = 'ADMIN'
+            profile_obj.role = "ADMIN"
             profile_obj.save()
 
             return Response(
@@ -440,14 +447,17 @@ class ProfileView(APIView):
         context["user_obj"] = ProfileSerializer(self.request.profile).data
         return Response(context, status=status.HTTP_200_OK)
 
+
 class DocumentListView(APIView, LimitOffsetPagination):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Document
 
     def get_context_data(self, **kwargs):
         params = self.request.query_params
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
+        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
+            "-id"
+        )
         if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
             queryset = queryset
         else:
@@ -475,7 +485,9 @@ class DocumentListView(APIView, LimitOffsetPagination):
                 )
 
         context = {}
-        profile_list = Profile.objects.filter(is_active=True, org=self.request.profile.org)
+        profile_list = Profile.objects.filter(
+            is_active=True, org=self.request.profile.org
+        )
         if self.request.profile.role == "ADMIN" or self.request.profile.is_admin:
             profiles = profile_list.order_by("user__email")
         else:
@@ -533,15 +545,15 @@ class DocumentListView(APIView, LimitOffsetPagination):
         context["status_choices"] = Document.DOCUMENT_STATUS_CHOICE
         return context
 
-    @extend_schema(
-        tags=["documents"], parameters=swagger_params1.document_get_params
-    )
+    @extend_schema(tags=["documents"], parameters=swagger_params1.document_get_params)
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
         return Response(context)
 
     @extend_schema(
-        tags=["documents"], parameters=swagger_params1.organization_params,request=DocumentCreateSwaggerSerializer
+        tags=["documents"],
+        parameters=swagger_params1.organization_params,
+        request=DocumentCreateSwaggerSerializer,
     )
     def post(self, request, *args, **kwargs):
         params = request.data
@@ -576,15 +588,13 @@ class DocumentListView(APIView, LimitOffsetPagination):
 
 
 class DocumentDetailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
         return Document.objects.filter(id=pk).first()
 
-    @extend_schema(
-        tags=["documents"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["documents"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if not self.object:
@@ -624,9 +634,7 @@ class DocumentDetailView(APIView):
         )
         return Response(context, status=status.HTTP_200_OK)
 
-    @extend_schema(
-        tags=["documents"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["documents"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         document = self.get_object(pk)
         if not document:
@@ -657,9 +665,10 @@ class DocumentDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    
     @extend_schema(
-        tags=["documents"], parameters=swagger_params1.organization_params,request=DocumentEditSwaggerSerializer
+        tags=["documents"],
+        parameters=swagger_params1.organization_params,
+        request=DocumentEditSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         self.object = self.get_object(pk)
@@ -724,7 +733,9 @@ class UserStatusView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
-        description="User Status View",parameters=swagger_params1.organization_params, request=UserUpdateStatusSwaggerSerializer
+        description="User Status View",
+        parameters=swagger_params1.organization_params,
+        request=UserUpdateStatusSwaggerSerializer,
     )
     def post(self, request, pk, format=None):
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
@@ -766,14 +777,12 @@ class DomainList(APIView):
     model = APISettings
     permission_classes = (IsAuthenticated,)
 
-    @extend_schema(
-        tags=["Settings"],parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Settings"], parameters=swagger_params1.organization_params)
     def get(self, request, *args, **kwargs):
         api_settings = APISettings.objects.filter(org=request.profile.org)
-        users = Profile.objects.filter(is_active=True, org=request.profile.org).order_by(
-            "user__email"
-        )
+        users = Profile.objects.filter(
+            is_active=True, org=request.profile.org
+        ).order_by("user__email")
         return Response(
             {
                 "error": False,
@@ -784,7 +793,9 @@ class DomainList(APIView):
         )
 
     @extend_schema(
-        tags=["Settings"],parameters=swagger_params1.organization_params, request=APISettingsSwaggerSerializer
+        tags=["Settings"],
+        parameters=swagger_params1.organization_params,
+        request=APISettingsSwaggerSerializer,
     )
     def post(self, request, *args, **kwargs):
         params = request.data
@@ -793,7 +804,9 @@ class DomainList(APIView):
             assign_to_list = params.get("lead_assigned_to")
         serializer = APISettingsSerializer(data=params)
         if serializer.is_valid():
-            settings_obj = serializer.save(created_by=request.profile.user, org=request.profile.org)
+            settings_obj = serializer.save(
+                created_by=request.profile.user, org=request.profile.org
+            )
             if params.get("tags"):
                 tags = params.get("tags")
                 for tag in tags:
@@ -815,12 +828,10 @@ class DomainList(APIView):
 
 class DomainDetailView(APIView):
     model = APISettings
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
-    @extend_schema(
-        tags=["Settings"],parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Settings"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):
         api_setting = self.get_object(pk)
         return Response(
@@ -829,7 +840,9 @@ class DomainDetailView(APIView):
         )
 
     @extend_schema(
-        tags=["Settings"],parameters=swagger_params1.organization_params, request=APISettingsSwaggerSerializer
+        tags=["Settings"],
+        parameters=swagger_params1.organization_params,
+        request=APISettingsSwaggerSerializer,
     )
     def put(self, request, pk, **kwargs):
         api_setting = self.get_object(pk)
@@ -860,9 +873,7 @@ class DomainDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    @extend_schema(
-        tags=["Settings"],parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Settings"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, **kwargs):
         api_setting = self.get_object(pk)
         if api_setting:
@@ -872,6 +883,7 @@ class DomainDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 class GoogleLoginView(APIView):
     """
     Check for authentication with google
@@ -879,33 +891,39 @@ class GoogleLoginView(APIView):
         Returns token of logged In user
     """
 
-
     @extend_schema(
-        description="Login through Google",  request=SocialLoginSerializer,
+        description="Login through Google",
+        request=SocialLoginSerializer,
     )
     def post(self, request):
-        payload = {'access_token': request.data.get("token")}  # validate the token
-        r = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', params=payload)
+        payload = {"access_token": request.data.get("token")}  # validate the token
+        r = requests.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo", params=payload
+        )
         data = json.loads(r.text)
         print(data)
-        if 'error' in data:
-            content = {'message': 'wrong google token / this google token is already expired.'}
+        if "error" in data:
+            content = {
+                "message": "wrong google token / this google token is already expired."
+            }
             return Response(content)
         # create user if not exist
         try:
-            user = User.objects.get(email=data['email'])
+            user = User.objects.get(email=data["email"])
         except User.DoesNotExist:
             user = User()
-            user.email = data['email']
-            user.profile_pic = data['picture']
+            user.email = data["email"]
+            user.profile_pic = data["picture"]
             # provider random default password
             user.password = make_password(BaseUserManager().make_random_password())
-            user.email = data['email']
+            user.email = data["email"]
             user.save()
-        token = RefreshToken.for_user(user)  # generate token without username & password
+        token = RefreshToken.for_user(
+            user
+        )  # generate token without username & password
         response = {}
-        response['username'] = user.email
-        response['access_token'] = str(token.access_token)
-        response['refresh_token'] = str(token)
-        response['user_id'] = user.id
+        response["username"] = user.email
+        response["access_token"] = str(token.access_token)
+        response["refresh_token"] = str(token)
+        response["user_id"] = user.id
         return Response(response)
