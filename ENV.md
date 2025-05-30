@@ -14,11 +14,11 @@ AWS_SES_REGION_ENDPOINT=""
 
 
 # DB
-DBNAME="bottlecrm"
+DBNAME="postgres"
 DBUSER="postgres"
-DBPASSWORD="root"
+DBPASSWORD="0000"
 DBHOST="localhost"
-DBPORT=""
+DBPORT="5432"
 
 # Sentry
 SENTRY_DSN=""

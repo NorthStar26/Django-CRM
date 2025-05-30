@@ -3,12 +3,12 @@ services:
   crm-app:
     image: djcrm:1
     container_name: crm-app
-    entrypoint: []  # Override the entrypoint
+    entrypoint: []
     command: bash -c "sleep 10 && cd /app && python3 manage.py collectstatic --noinput && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
     environment:
-      - DBNAME=crm
-      - DBUSER=crm
-      - DBPASSWORD=crm
+      - DBNAME=postgres
+      - DBUSER=postgres
+      - DBPASSWORD=0000
       - DBHOST=crm-db
       - DBPORT=5432
 
@@ -23,9 +23,9 @@ services:
     image: postgres:latest
     container_name: crm-db
     environment:
-      - POSTGRES_DB=crm
-      - POSTGRES_USER=crm
-      - POSTGRES_PASSWORD=crm
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=0000
     ports:
       - 5432:5432
     volumes:
