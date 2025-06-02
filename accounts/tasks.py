@@ -16,12 +16,12 @@ app = Celery("redis://")
 
 @app.task
 def send_email(email_obj_id):
-    email_obj = Email.objects.filter(id=email_obj_id).first()
+    email_obj = AccountEmail.objects.filter(id=email_obj_id).first()
     if email_obj:
         from_email = email_obj.from_email
         contacts = email_obj.recipients.all()
         for contact_obj in contacts:
-            if not EmailLog.objects.filter(
+            if not AccountEmailLog.objects.filter(
                 email=email_obj, contact=contact_obj, is_sent=True
             ).exists():
                 html = email_obj.message_body
@@ -51,7 +51,7 @@ def send_email(email_obj_id):
                     if res:
                         email_obj.rendered_message_body = html_content
                         email_obj.save()
-                        EmailLog.objects.create(
+                        AccountEmailLog.objects.create(
                             email=email_obj, contact=contact_obj, is_sent=True
                         )
                 except Exception as e:
@@ -86,7 +86,7 @@ def send_email_to_assigned_user(recipients, from_email):
 
 @app.task
 def send_scheduled_emails():
-    email_objs = Email.objects.filter(scheduled_later=True)
+    email_objs = AccountEmail.objects.filter(scheduled_later=True)
     # TODO: modify this later , since models are updated
     for each in email_objs:
         scheduled_date_time = each.scheduled_date_time

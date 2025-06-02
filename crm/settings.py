@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_ses",
     "drf_spectacular",
+    #"drf_yasg", 
     "common",
     "accounts",
     "cases",
