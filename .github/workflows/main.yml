@@ -1,18 +1,31 @@
-name: Notify Teams on Push
+name: Notify Teams on PR Events
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types: [opened, closed]
 
 jobs:
-  notify:
+  notify-teams:
     runs-on: ubuntu-latest
     steps:
-      - name: Send notification to Teams
+      - name: Notify Teams about PR event
+        env:
+          WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+          PR_STATE: ${{ github.event.action }}
         run: |
+          if [ "$PR_STATE" == "closed" ] && [ "${{ github.event.pull_request.merged }}" == "true" ]; then
+            STATUS="✅ Merged"
+          elif [ "$PR_STATE" == "opened" ]; then
+            STATUS="📌 New PR"
+          else
+            STATUS="🔄 PR Closed without Merge"
+          fi
+
           curl -H 'Content-Type: application/json' \
-               -d '{
-                     "text": "📢 New push to main branch on ${{ github.repository }} by ${{ github.actor }}"
-                   }' \
-               ${{ secrets.TEAMS_WEBHOOK_URL }}
+            -d "{
+              \"text\": \"$STATUS: [$PR_TITLE]($PR_URL) by $PR_USER\"
+            }" \
+            $WEBHOOK_URL
