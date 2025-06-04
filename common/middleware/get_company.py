@@ -4,6 +4,7 @@ from django.contrib.auth import logout
 from django.core.exceptions import ValidationError,PermissionDenied
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.exceptions import AuthenticationFailed
 from crum import get_current_user
 from django.utils.functional import SimpleLazyObject
 
