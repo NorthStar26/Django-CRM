@@ -1,12 +1,11 @@
-from celery import Celery
+from celery import shared_task
 
 from common.models import Profile
 from teams.models import Teams
 
-app = Celery("redis://")
 
 
-@app.task
+@shared_task
 def remove_users(removed_users_list, team_id):
     removed_users_list = [i for i in removed_users_list if i.isdigit()]
     users_list = Profile.objects.filter(id__in=removed_users_list)
@@ -67,7 +66,7 @@ def remove_users(removed_users_list, team_id):
                     event.assigned_to.remove(user)
 
 
-@app.task
+@shared_task
 def update_team_users(team_id):
     """this function updates assigned_to field on all models when a team is updated"""
     team = Teams.objects.filter(id=team_id).first()

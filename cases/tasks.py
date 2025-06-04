@@ -1,4 +1,4 @@
-from celery import Celery
+from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -6,10 +6,9 @@ from django.template.loader import render_to_string
 from accounts.models import Profile
 from cases.models import Case
 
-app = Celery("redis://")
 
 
-@app.task
+@shared_task
 def send_email_to_assigned_user(recipients, case_id):
     """Send Mail To Users When they are assigned to a case"""
     case = Case.objects.get(id=case_id)

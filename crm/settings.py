@@ -161,7 +161,22 @@ USE_I18N = True
 
 USE_TZ = True
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Email configuration
+# Use different email backends based on environment
+if os.environ.get("ENV_TYPE") == "prod":
+    # Production email backend (Amazon SES)
+    EMAIL_BACKEND = "django_ses.SESBackend"
+elif os.environ.get("SMTP_ENABLED", "").lower() == "true":
+    # SMTP email configuration (useful for testing real email delivery)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
+    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+else:
+    # Development email backend
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 AUTH_USER_MODEL = "common.User"
 
@@ -182,9 +197,15 @@ ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 
 
 # celery Tasks
-CELERY_BROKER_URL = os.environ["CELERY_BROKER_URL"]
-CELERY_RESULT_BACKEND = os.environ["CELERY_RESULT_BACKEND"]
-
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get(
+    "CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
+)
+# Windows-specific settings to avoid permission errors
+if os.name == "nt":
+    CELERY_TASK_ALWAYS_EAGER = False
+    CELERY_WORKER_POOL = "solo"
+print(">>> CELERY_BROKER_URL", CELERY_BROKER_URL)
 
 LOGGING = {
     "version": 1,
@@ -201,12 +222,14 @@ LOGGING = {
         "django.server": {
             "()": "django.utils.log.ServerFormatter",
             "format": "[%(server_time)s] %(message)s",
-        }
+        },
+        "verbose": {
+            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s"
+        },
     },
     "handlers": {
         "console": {
-            "level": "INFO",
-            "filters": ["require_debug_true"],
+            "level": "DEBUG",
             "class": "logging.StreamHandler",
         },
         "console_debug_false": {
@@ -243,6 +266,16 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "celery": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "celery.task": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
     },
 }
 
@@ -258,7 +291,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "common.external_auth.CustomDualAuthentication"
+        "common.external_auth.CustomDualAuthentication",
         # "rest_framework.authentication.SessionAuthentication",
         # "rest_framework.authentication.BasicAuthentication",
     ),
@@ -275,7 +308,6 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "PREPROCESSING_HOOKS": ["common.custom_openapi.preprocessing_filter_spec"],
-    
 }
 
 # JWT_SETTINGS = {

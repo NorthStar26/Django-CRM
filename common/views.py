@@ -136,10 +136,9 @@ class UsersListView(APIView, LimitOffsetPagination):
                         org=request.profile.org,
                     )
 
-                    # send_email_to_new_user.delay(
-                    #     profile.id,
-                    #     request.profile.org.id,
-                    # )
+                    send_email_to_new_user.delay(
+                        profile.id,
+                    )
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
                         status=status.HTTP_201_CREATED,
@@ -917,17 +916,124 @@ class GoogleLoginView(APIView):
             # Generate random password
             import string
             import random
+
             def generate_random_password(length=10):
                 chars = string.ascii_letters + string.digits
-                return ''.join(random.choice(chars) for _ in range(length))
-            
+                return "".join(random.choice(chars) for _ in range(length))
+
             user.password = make_password(generate_random_password())
             user.save()
 
-        token = RefreshToken.for_user(user)  # generate token without username & password
+        token = RefreshToken.for_user(
+            user
+        )  # generate token without username & password
         response = {}
         response["username"] = user.email
         response["access_token"] = str(token.access_token)
         response["refresh_token"] = str(token)
         response["user_id"] = user.id
         return Response(response)
+
+
+class UserActivationView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self, request, uid, token, activation_key):
+        try:
+            uid = urlsafe_base64_decode(uid).decode()
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if (
+            user is not None
+            and account_activation_token.check_token(user, token)
+            and user.activation_key == activation_key
+        ):
+            # Check if the activation key is still valid (within 2 hours)
+            current_time = timezone.now()
+            key_time_str = activation_key.replace(token, "")
+            try:
+                key_time = datetime.datetime.strptime(key_time_str, "%Y-%m-%d-%H-%M-%S")
+                key_time = timezone.make_aware(key_time)
+                if current_time > key_time:
+                    return Response(
+                        {"error": True, "errors": "Activation link has expired"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except ValueError:
+                return Response(
+                    {"error": True, "errors": "Invalid activation link"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Set password from request data
+            password = request.data.get("password")
+            if not password:
+                return Response(
+                    {"error": True, "errors": "Password is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user.set_password(password)
+            user.is_active = True
+            user.activation_key = ""  # Clear the activation key after use
+            user.save()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Account activated successfully. You can now login.",
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"error": True, "errors": "Invalid activation link"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def get(self, request, uid, token, activation_key):
+        # Just validate the activation link is valid, without setting the password
+        try:
+            uid = urlsafe_base64_decode(uid).decode()
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if (
+            user is not None
+            and account_activation_token.check_token(user, token)
+            and user.activation_key == activation_key
+        ):
+            # Check if the activation key is still valid (within 2 hours)
+            current_time = timezone.now()
+            key_time_str = activation_key.replace(token, "")
+            try:
+                key_time = datetime.datetime.strptime(key_time_str, "%Y-%m-%d-%H-%M-%S")
+                key_time = timezone.make_aware(key_time)
+                if current_time > key_time:
+                    return Response(
+                        {"error": True, "errors": "Activation link has expired"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except ValueError:
+                return Response(
+                    {"error": True, "errors": "Invalid activation link"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Activation link is valid",
+                    "email": user.email,
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"error": True, "errors": "Invalid activation link"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

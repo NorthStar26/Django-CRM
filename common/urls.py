@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt import views as jwt_views
 
 from common import views
+from common.user_activation import UserActivationView
 
 app_name = "api_common"
 
@@ -12,6 +13,12 @@ urlpatterns = [
         "auth/refresh-token/",
         jwt_views.TokenRefreshView.as_view(),
         name="token_refresh",
+    ),
+    # User activation URL
+    path(
+        "auth/activate-user/<str:uid>/<str:token>/<str:activation_key>/",
+        UserActivationView.as_view(),
+        name="user_activation",
     ),
     # GoogleLoginView
     path("auth/google/", views.GoogleLoginView.as_view()),

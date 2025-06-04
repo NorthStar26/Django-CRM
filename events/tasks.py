@@ -1,4 +1,4 @@
-from celery import Celery
+from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -6,10 +6,9 @@ from django.template.loader import render_to_string
 from common.models import Profile
 from events.models import Event
 
-app = Celery("redis://")
 
 
-@app.task
+@shared_task
 def send_email(event_id, recipients):
     event = Event.objects.filter(id=event_id).first()
     subject = " Invitation for an event."

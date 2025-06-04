@@ -1,6 +1,5 @@
 version: '3'
-services:
-  crm-app:
+services:  crm-app:
     image: djcrm:1
     container_name: crm-app
     entrypoint: []
@@ -11,14 +10,59 @@ services:
       - DBPASSWORD=0000
       - DBHOST=crm-db
       - DBPORT=5432
-
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENV_TYPE=dev
+      - DEFAULT_FROM_EMAIL=noreply@example.com
+      - ADMIN_EMAIL=admin@example.com
+      - SECRET_KEY=your-secret-key
+      - DOMAIN_NAME=localhost:8000
+      # SMTP Configuration - Uncomment and configure when needed
+      #- SMTP_ENABLED=true
+      #- EMAIL_HOST=smtp.gmail.com
+      #- EMAIL_PORT=587
+      #- EMAIL_USE_TLS=true
+      #- EMAIL_HOST_USER=your-email@gmail.com
+      #- EMAIL_HOST_PASSWORD=your-app-password
     depends_on:
       - crm-db
+      - redis
     ports:
       - 8000:8000
     networks:
       - nw
-
+  
+  celery:
+    image: djcrm:1
+    container_name: crm-celery
+    entrypoint: []
+    command: bash -c "cd /app && celery -A crm worker --loglevel=debug --pool=solo"
+    environment:
+      - DBNAME=postgres
+      - DBUSER=postgres
+      - DBPASSWORD=0000
+      - DBHOST=crm-db
+      - DBPORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0      - ENV_TYPE=dev
+      - DEFAULT_FROM_EMAIL=noreply@example.com
+      - ADMIN_EMAIL=admin@example.com
+      - SECRET_KEY=your-secret-key
+      - DOMAIN_NAME=localhost:8000
+      # SMTP Configuration - Uncomment and configure when needed
+      #- SMTP_ENABLED=true
+      #- EMAIL_HOST=smtp.gmail.com
+      #- EMAIL_PORT=587
+      #- EMAIL_USE_TLS=true
+      #- EMAIL_HOST_USER=your-email@gmail.com
+      #- EMAIL_HOST_PASSWORD=your-app-password
+      # Use console backend by default (for development)
+      - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+    depends_on:
+      - crm-db
+      - redis
+    networks:
+      - nw
   crm-db:
     image: postgres:latest
     container_name: crm-db
@@ -30,6 +74,14 @@ services:
       - 5432:5432
     volumes:
       - /var/run/postgresql/:/var/run/postgresql
+    networks:
+      - nw
+      
+  redis:
+    image: redis:latest
+    container_name: crm-redis
+    ports:
+      - 6379:6379
     networks:
       - nw
 

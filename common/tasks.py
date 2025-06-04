@@ -1,6 +1,6 @@
 import datetime
 
-from celery import Celery
+from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMessage
@@ -12,41 +12,57 @@ from django.utils.http import urlsafe_base64_encode
 from common.models import Comment, Profile, User
 from common.token_generator import account_activation_token
 
-app = Celery("redis://")
 
-
-@app.task
-def send_email_to_new_user(user_id):
-
+@shared_task
+def send_email_to_new_user(profile_id):
     """Send Mail To Users When their account is created"""
-    user_obj = User.objects.filter(id=user_id).first()
+    import logging
 
-    if user_obj:
+    logger = logging.getLogger("celery")
+    logger.info("Starting send_email_to_new_user task for profile_id: %s", profile_id)
+
+    profile_obj = Profile.objects.filter(id=profile_id).first()
+
+    if profile_obj:
+        user_obj = profile_obj.user
         context = {}
         user_email = user_obj.email
         context["url"] = settings.DOMAIN_NAME
-        context["uid"] = (urlsafe_base64_encode(force_bytes(user_obj.pk)),)
+        context["user_email"] = user_email
+        context["uid"] = urlsafe_base64_encode(force_bytes(user_obj.pk))
         context["token"] = account_activation_token.make_token(user_obj)
+
+        # Create an activation key that will expire in 2 hours
         time_delta_two_hours = datetime.datetime.strftime(
             timezone.now() + datetime.timedelta(hours=2), "%Y-%m-%d-%H-%M-%S"
         )
-        # creating an activation token and saving it in user model
         activation_key = context["token"] + time_delta_two_hours
+
+        # Save the activation key in the user model
         user_obj.activation_key = activation_key
         user_obj.save()
 
-        context["complete_url"] = context[
-            "url"
-        ] + "/auth/activate-user/{}/{}/{}/".format(
-            context["uid"][0],
-            context["token"],
-            activation_key,
+        # Build the complete URL for account activation
+        context["complete_url"] = "{}/auth/activate-user/{}/{}/{}/".format(
+            context["url"], context["uid"], context["token"], activation_key
         )
-        recipients = [
-            user_email,
-        ]
-        subject = "Welcome to Bottle CRM"
-        html_content = render_to_string("user_status_in.html", context=context)
+
+        recipients = [user_email]
+        subject = "You've been invited to join Django CRM - Set your password"
+
+        # Log template path info
+        try:
+            from django.template.loader import get_template
+
+            template = get_template("user_invitation_email.html")
+            template_path = template.origin.name
+            logger.info("Template path: %s", template_path)
+        except Exception as e:
+            logger.error("Error getting template path: %s", str(e))
+
+        # Render the template and log the content
+        html_content = render_to_string("user_invitation_email.html", context=context)
+        logger.info("Rendered HTML content: %s", html_content)
 
         msg = EmailMessage(
             subject,
@@ -55,10 +71,15 @@ def send_email_to_new_user(user_id):
             to=recipients,
         )
         msg.content_subtype = "html"
-        msg.send()
+
+        try:
+            msg.send()
+            logger.info("Email sent successfully to %s", user_email)
+        except Exception as e:
+            logger.error("Failed to send email: %s", str(e))
 
 
-@app.task
+@shared_task
 def send_email_user_mentions(
     comment_id,
     called_from,
@@ -126,7 +147,7 @@ def send_email_user_mentions(
                 msg.send()
 
 
-@app.task
+@shared_task
 def send_email_user_status(
     user_id,
     status_changed_user="",
@@ -166,7 +187,7 @@ def send_email_user_status(
             msg.send()
 
 
-@app.task
+@shared_task
 def send_email_user_delete(
     user_email,
     deleted_by="",
@@ -192,7 +213,7 @@ def send_email_user_delete(
             msg.send()
 
 
-@app.task
+@shared_task
 def resend_activation_link_to_user(
     user_email="",
 ):
@@ -242,7 +263,7 @@ def resend_activation_link_to_user(
             msg.send()
 
 
-@app.task
+@shared_task
 def send_email_to_reset_password(user_email):
     """Send Mail To Users When their account is created"""
     user = User.objects.filter(email=user_email).first()

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import pytz
-from celery import Celery
+from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template import Context, Template
@@ -11,10 +11,8 @@ from accounts.models import Account, AccountEmail, AccountEmailLog
 from common.models import Profile
 from common.utils import convert_to_custom_timezone
 
-app = Celery("redis://")
 
-
-@app.task
+@shared_task
 def send_email(email_obj_id):
     email_obj = Email.objects.filter(id=email_obj_id).first()
     if email_obj:
@@ -58,7 +56,7 @@ def send_email(email_obj_id):
                     print(e)
 
 
-@app.task
+@shared_task
 def send_email_to_assigned_user(recipients, from_email):
     """Send Mail To Users When they are assigned to a contact"""
     account = Account.objects.filter(id=from_email).first()
@@ -84,7 +82,7 @@ def send_email_to_assigned_user(recipients, from_email):
             msg.send()
 
 
-@app.task
+@shared_task
 def send_scheduled_emails():
     email_objs = Email.objects.filter(scheduled_later=True)
     # TODO: modify this later , since models are updated
