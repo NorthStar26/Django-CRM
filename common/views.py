@@ -135,11 +135,7 @@ class UsersListView(APIView, LimitOffsetPagination):
                         address=address_obj,
                         org=request.profile.org,
                     )
-
-                    # send_email_to_new_user.delay(
-                    #     profile.id,
-                    #     request.profile.org.id,
-                    # )
+                    send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
                         status=status.HTTP_201_CREATED,
@@ -917,14 +913,17 @@ class GoogleLoginView(APIView):
             # Generate random password
             import string
             import random
+
             def generate_random_password(length=10):
                 chars = string.ascii_letters + string.digits
-                return ''.join(random.choice(chars) for _ in range(length))
-            
+                return "".join(random.choice(chars) for _ in range(length))
+
             user.password = make_password(generate_random_password())
             user.save()
 
-        token = RefreshToken.for_user(user)  # generate token without username & password
+        token = RefreshToken.for_user(
+            user
+        )  # generate token without username & password
         response = {}
         response["username"] = user.email
         response["access_token"] = str(token.access_token)

@@ -1,6 +1,5 @@
-import datetime
-
 from celery import Celery
+import datetime
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMessage
@@ -9,19 +8,22 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from common.models import Comment, Profile, User
+from common.models import Comment, User
 from common.token_generator import account_activation_token
 
-app = Celery("redis://")
+app = Celery("crm")
 
 
-@app.task
-def send_email_to_new_user(user_id):
-
+@app.task(bind=True, max_retries=3)
+def send_email_to_new_user(self, user_id):
     """Send Mail To Users When their account is created"""
-    user_obj = User.objects.filter(id=user_id).first()
+    print(f"[Celery] send_email_to_new_user triggered for user_id={user_id}")
+    try:
+        user_obj = User.objects.filter(id=user_id).first()
+        if not user_obj:
+            print(f"[Celery] User with id {user_id} not found")
+            raise ValueError(f"User with id {user_id} not found")
 
-    if user_obj:
         context = {}
         user_email = user_obj.email
         context["url"] = settings.DOMAIN_NAME
@@ -42,9 +44,7 @@ def send_email_to_new_user(user_id):
             context["token"],
             activation_key,
         )
-        recipients = [
-            user_email,
-        ]
+        recipients = [user_email]
         subject = "Welcome to Bottle CRM"
         html_content = render_to_string("user_status_in.html", context=context)
 
@@ -56,6 +56,11 @@ def send_email_to_new_user(user_id):
         )
         msg.content_subtype = "html"
         msg.send()
+        print(f"[Celery] Welcome email sent to {user_email}")
+    except Exception as exc:
+        print(f"[Celery] Error sending welcome email to user_id={user_id}: {exc}")
+        # Retry task in case of error, with exponential backoff
+        self.retry(exc=exc, countdown=2**self.request.retries)
 
 
 @app.task
