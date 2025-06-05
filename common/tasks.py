@@ -7,11 +7,14 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+import logging
 
 from common.models import Comment, User
 from common.token_generator import account_activation_token
 
 app = Celery("crm")
+
+logger = logging.getLogger(__name__)
 
 
 @app.task(bind=True, max_retries=3)
@@ -143,8 +146,8 @@ def send_email_user_status(
         context["message"] = "deactivated"
         context["email"] = user.email
         context["url"] = settings.DOMAIN_NAME
-        if user.has_marketing_access:
-            context["url"] = context["url"] + "/marketing"
+        # if user.has_marketing_access:
+        #     context["url"] = context["url"] + "/marketing"
         if user.is_active:
             context["message"] = "activated"
         context["status_changed_user"] = status_changed_user
@@ -177,6 +180,7 @@ def send_email_user_delete(
     deleted_by="",
 ):
     """Send Mail To Users When their account is deleted"""
+
     if user_email:
         context = {}
         context["message"] = "deleted"
@@ -187,14 +191,20 @@ def send_email_user_delete(
         subject = "CRM : Your account is Deleted. "
         html_content = render_to_string("user_delete_email.html", context=context)
         if recipients:
-            msg = EmailMessage(
-                subject,
-                html_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=recipients,
-            )
-            msg.content_subtype = "html"
-            msg.send()
+            try:
+                msg = EmailMessage(
+                    subject,
+                    html_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=recipients,
+                )
+                msg.content_subtype = "html"
+                msg.send()
+                logger.info(f"[Celery] Deletion email sent to {user_email}")
+            except Exception as e:
+                logger.error(
+                    f"[Celery] Failed to send deletion email to {user_email}: {e}"
+                )
 
 
 @app.task

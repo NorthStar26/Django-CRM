@@ -53,6 +53,7 @@ from common.tasks import (
     send_email_to_new_user,
     send_email_to_reset_password,
     send_email_user_delete,
+    send_email_user_status,
 )
 from common.token_generator import account_activation_token
 
@@ -299,6 +300,12 @@ class UserDetailView(APIView):
             user.save()
         if profile_serializer.is_valid():
             profile = profile_serializer.save()
+            # Send status change email after profile update
+            from common.tasks import send_email_user_status
+
+            send_email_user_status.delay(
+                profile.user.id, status_changed_user=request.user.email
+            )
             return Response(
                 {"error": False, "message": "User Updated Successfully"},
                 status=status.HTTP_200_OK,
