@@ -88,6 +88,7 @@ class UsersListView(APIView, LimitOffsetPagination):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
+        tags=["users"],
         parameters=swagger_params1.organization_params,
         request=UserCreateSwaggerSerializer,
     )
