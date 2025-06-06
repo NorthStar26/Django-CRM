@@ -7,8 +7,8 @@ from django.template.loader import render_to_string
 from common.models import User
 from invoices.models import Invoice, InvoiceHistory
 
-app = Celery("redis://")
-
+#app = Celery("redis://")
+from crm.celery import app
 
 @app.task
 def send_email(invoice_id, recipients, domain="demo.django-crm.io", protocol="http"):

@@ -6,8 +6,8 @@ from django.template.loader import render_to_string
 from common.models import Profile
 from opportunity.models import Opportunity
 
-app = Celery("redis://")
-
+#app = Celery("redis://")
+from crm.celery import app
 
 @app.task
 def send_email_to_assigned_user(recipients, opportunity_id):

@@ -8,8 +8,8 @@ from accounts.models import Account, Email
 from common.models import User
 from contacts.models import Contact
 from tasks.models import Task
-
-app = Celery("redis://")
+from crm.celery import app
+#app = Celery("redis://")
 
 
 @app.task

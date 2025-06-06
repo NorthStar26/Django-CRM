@@ -11,8 +11,8 @@ from accounts.models import Account, AccountEmail, AccountEmailLog
 from common.models import Profile
 from common.utils import convert_to_custom_timezone
 
-app = Celery("redis://")
-
+#app = Celery("redis://")
+from crm.celery import app
 
 @app.task
 def send_email(email_obj_id):

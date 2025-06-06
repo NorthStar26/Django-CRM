@@ -3,8 +3,8 @@ from celery import Celery
 from common.models import Profile
 from teams.models import Teams
 
-app = Celery("redis://")
-
+#app = Celery("redis://")
+from crm.celery import app
 
 @app.task
 def remove_users(removed_users_list, team_id):
