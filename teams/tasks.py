@@ -1,10 +1,11 @@
 from celery import Celery
+from django.conf import settings
 
 from common.models import Profile
 from teams.models import Teams
 
-#app = Celery("redis://")
-from crm.celery import app
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
+
 
 @app.task
 def remove_users(removed_users_list, team_id):

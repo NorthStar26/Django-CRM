@@ -11,8 +11,8 @@ from accounts.models import Account, AccountEmail, AccountEmailLog
 from common.models import Profile
 from common.utils import convert_to_custom_timezone
 
-#app = Celery("redis://")
-from crm.celery import app
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
+
 
 @app.task
 def send_email(email_obj_id):
@@ -29,11 +29,7 @@ def send_email(email_obj_id):
                     "email": contact_obj.primary_email
                     if contact_obj.primary_email
                     else "",
-                    "name": contact_obj.first_name
-                    if contact_obj.first_name
-                    else "" + " " + contact_obj.last_name
-                    if contact_obj.last_name
-                    else "",
+                    "name": f"{contact_obj.first_name or ''} {contact_obj.last_name or ''}",
                 }
                 try:
                     html_content = Template(html).render(Context(context_data))
@@ -42,9 +38,7 @@ def send_email(email_obj_id):
                         subject,
                         html_content,
                         from_email=from_email,
-                        to=[
-                            contact_obj.primary_email,
-                        ],
+                        to=[contact_obj.primary_email],
                     )
                     msg.content_subtype = "html"
                     res = msg.send()

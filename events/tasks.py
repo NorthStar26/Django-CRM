@@ -5,8 +5,8 @@ from django.template.loader import render_to_string
 
 from common.models import Profile
 from events.models import Event
-from crm.celery import app
-#app = Celery("redis://")
+
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 
 @app.task

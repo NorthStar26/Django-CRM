@@ -10,8 +10,8 @@ from django.template.loader import render_to_string
 from common.models import Org, Profile
 from leads.models import Lead
 
-#app = Celery("redis://")
-from crm.celery import app
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
+
 
 def get_rendered_html(template_name, context={}):
     html_content = render_to_string(template_name, context)

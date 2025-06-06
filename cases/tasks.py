@@ -6,8 +6,7 @@ from django.template.loader import render_to_string
 from accounts.models import Profile
 from cases.models import Case
 
-from crm.celery import app
-# app = Celery("redis://")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 
 @app.task

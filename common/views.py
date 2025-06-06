@@ -54,6 +54,7 @@ from common.tasks import (
     send_email_to_new_user,
     send_email_to_reset_password,
     send_email_user_delete,
+    send_email_user_status,
 )
 from common.token_generator import account_activation_token
 
@@ -99,6 +100,7 @@ class UsersListView(APIView, LimitOffsetPagination):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
+        tags=["users"],
         parameters=swagger_params1.organization_params,
         request=UserCreateSwaggerSerializer,
     )
@@ -146,11 +148,7 @@ class UsersListView(APIView, LimitOffsetPagination):
                         address=address_obj,
                         org=request.profile.org,
                     )
-
-                    # send_email_to_new_user.delay(
-                    #     profile.id,
-                    #     request.profile.org.id,
-                    # )
+                    send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
                         status=status.HTTP_201_CREATED,
@@ -313,6 +311,10 @@ class UserDetailView(APIView):
             user.save()
         if profile_serializer.is_valid():
             profile = profile_serializer.save()
+            # Send status change email after profile update
+            from common.tasks import send_email_user_status
+
+            send_email_user_status.delay(profile.user.id, request.user.email)
             return Response(
                 {"error": False, "message": "User Updated Successfully"},
                 status=status.HTTP_200_OK,
@@ -928,14 +930,17 @@ class GoogleLoginView(APIView):
             # Generate random password
             import string
             import random
+
             def generate_random_password(length=10):
                 chars = string.ascii_letters + string.digits
-                return ''.join(random.choice(chars) for _ in range(length))
-            
+                return "".join(random.choice(chars) for _ in range(length))
+
             user.password = make_password(generate_random_password())
             user.save()
 
-        token = RefreshToken.for_user(user)  # generate token without username & password
+        token = RefreshToken.for_user(
+            user
+        )  # generate token without username & password
         response = {}
         response["username"] = user.email
         response["access_token"] = str(token.access_token)
