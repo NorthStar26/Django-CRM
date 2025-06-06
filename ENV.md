@@ -4,35 +4,42 @@ SECRET_KEY="mco934$@)NHUYTC%6789"
 ENV_TYPE="dev"
 DOMAIN_NAME=""
 
-# AWS
-AWS_BUCKET_NAME=""
 
+## AWS
+AWS_BUCKET_NAME=""
 AWS_ACCESS_KEY_ID=""
 AWS_SECRET_ACCESS_KEY=""
 AWS_SES_REGION_NAME=""
 AWS_SES_REGION_ENDPOINT=""
 
 
-# DB
+## DB
 DBNAME="postgres"
 DBUSER="postgres"
 DBPASSWORD="0000"
 DBHOST="localhost"
 DBPORT="5432"
 
-# Sentry
+
+## Sentry
 SENTRY_DSN=""
 
-# Celery
-CELERY_BROKER_URL=""
-CELERY_RESULT_BACKEND=""
 
-# Swagger
+## Celery
+CELERY_BROKER_URL="redis://localhost:6379/0"
+CELERY_RESULT_BACKEND="redis://localhost:6379/0"
+
+
+## Swagger
 SWAGGER_ROOT_URL=""
 
-#CACHES
+
+## CACHES
 MEMCACHELOCATION=""
 
-# Email
-DEFAULT_FROM_EMAIL=""
+
+## Email
+DEFAULT_FROM_EMAIL="bottlescrm@gmail.com"
 ADMIN_EMAIL=""
+EMAIL_HOST="localhost"
+EMAIL_PORT="1025"

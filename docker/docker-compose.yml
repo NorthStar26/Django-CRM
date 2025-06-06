@@ -1,9 +1,10 @@
 version: "3"
 services:
   crm-app:
-    image: djcrm:1
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
     container_name: crm-app
-    entrypoint: [] # Override the entrypoint
     command: bash -c "sleep 10 && cd /app && python3 manage.py collectstatic --noinput && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
     environment:
       - DBNAME=postgres
@@ -11,11 +12,36 @@ services:
       - DBPASSWORD=0000
       - DBHOST=crm-db
       - DBPORT=5432
-
+      - EMAIL_HOST=mailhog
+      - EMAIL_PORT=1025
+      - EMAIL_USE_TLS=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEFAULT_FROM_EMAIL=crm@example.com
+      - ADMIN_EMAIL=admin@example.com
+      - DOMAIN_NAME=localhost:8000
+      - SECRET_KEY=your-secret-key
+      - ENV_TYPE=dev
+      - SWAGGER_ROOT_URL=http://localhost:8000
     depends_on:
       - crm-db
+      - mailhog
+      - redis
     ports:
       - 8000:8000
+    networks:
+      - nw
+    volumes:
+      - ../:/app
+      - ../static:/app/static
+      - ../staticfiles:/app/staticfiles
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: crm-mailhog
+    ports:
+      - 1025:1025 # SMTP port
+      - 8025:8025 # Web UI
     networks:
       - nw
 
@@ -32,6 +58,48 @@ services:
       - /var/run/postgresql/:/var/run/postgresql
     networks:
       - nw
+      
+  redis:
+    image: redis:latest
+    container_name: crm-redis
+    ports:
+      - 6379:6379
+    networks:
+      - nw
+      
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
+    container_name: crm-celery
+    command: bash -c "cd /app && celery -A crm worker --loglevel=info"
+    environment:
+      - DBNAME=postgres
+      - DBUSER=postgres
+      - DBPASSWORD=0000
+      - DBHOST=crm-db
+      - DBPORT=5432
+      - EMAIL_HOST=mailhog
+      - EMAIL_PORT=1025
+      - EMAIL_USE_TLS=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEFAULT_FROM_EMAIL=crm@example.com
+      - ADMIN_EMAIL=admin@example.com
+      - DOMAIN_NAME=localhost:8000
+      - SECRET_KEY=your-secret-key
+      - ENV_TYPE=dev
+      - SWAGGER_ROOT_URL=http://localhost:8000
+    depends_on:
+      - crm-db
+      - redis
+      - mailhog
+    networks:
+      - nw
+    volumes:
+      - ../:/app
+      - ../static:/app/static
+      - ../staticfiles:/app/staticfiles
 
 networks:
   nw: {}
