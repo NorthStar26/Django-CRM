@@ -19,7 +19,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DEFAULT_FROM_EMAIL=crm@example.com
       - ADMIN_EMAIL=admin@example.com
-      - DOMAIN_NAME=localhost:8000
+      - DOMAIN_NAME=http://localhost:8000
+      - FRONTEND_DOMAIN_NAME=http://localhost:3000
       - SECRET_KEY=your-secret-key
       - ENV_TYPE=dev
       - SWAGGER_ROOT_URL=http://localhost:8000
@@ -86,7 +87,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DEFAULT_FROM_EMAIL=crm@example.com
       - ADMIN_EMAIL=admin@example.com
-      - DOMAIN_NAME=localhost:8000
+      - DOMAIN_NAME=http://localhost:8000
+      - FRONTEND_DOMAIN_NAME=http://localhost:3000
       - SECRET_KEY=your-secret-key
       - ENV_TYPE=dev
       - SWAGGER_ROOT_URL=http://localhost:8000

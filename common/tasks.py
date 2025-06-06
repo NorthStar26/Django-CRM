@@ -28,7 +28,9 @@ def send_email_to_new_user(self, user_id):
             logger.error(f"[Celery] User with id {user_id} not found")
             raise ValueError(f"User with id {user_id} not found")
 
-        context["url"] = settings.DOMAIN_NAME
+        context["frontend_url"] = settings.FRONTEND_DOMAIN_NAME
+        context["url"] = settings.DOMAIN_NAME  # keep for backend/internal links
+
         context["uid"] = urlsafe_base64_encode(force_bytes(user_obj.pk))
         context["token"] = account_activation_token.make_token(user_obj)
         time_delta_two_hours = datetime.datetime.strftime(
@@ -40,10 +42,8 @@ def send_email_to_new_user(self, user_id):
         user_obj.save()
 
         context["complete_url"] = context[
-            "url"
-        ] + "/auth/activate-user/{}/{}/{}/".format(
-            context["uid"][0],
-            context["token"],
+            "frontend_url"
+        ] + "/activate-account/{}/".format(
             activation_key,
         )
         recipients = [user_obj.email]
