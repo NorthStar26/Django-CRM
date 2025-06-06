@@ -29,7 +29,7 @@ def send_email_to_new_user(self, user_id):
             raise ValueError(f"User with id {user_id} not found")
 
         context["url"] = settings.DOMAIN_NAME
-        context["uid"] = (urlsafe_base64_encode(force_bytes(user_obj.pk)),)
+        context["uid"] = urlsafe_base64_encode(force_bytes(user_obj.pk))
         context["token"] = account_activation_token.make_token(user_obj)
         time_delta_two_hours = datetime.datetime.strftime(
             timezone.now() + datetime.timedelta(hours=2), "%Y-%m-%d-%H-%M-%S"
