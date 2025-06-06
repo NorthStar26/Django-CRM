@@ -324,26 +324,42 @@ class UserDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+### Delete User Profile and Deactivate User Account
+
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
+        # Check if the user has permission to delete
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             return Response(
                 {"error": True, "errors": "Permission Denied"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        
+        # Get the user profile
         self.object = self.get_object(pk)
+
+        # Prohibit to delete themself
         if self.object.id == request.profile.id:
             return Response(
-                {"error": True, "errors": "Permission Denied"},
+                {"error": True, "errors": "You cannot delete yourself."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        
+        # Send email
         deleted_by = self.request.profile.user.email
         send_email_user_delete.delay(
             self.object.user.email,
             deleted_by=deleted_by,
         )
+
+        # Update user status to inactive
+        user = self.object.user
+        user.is_active = False
+        user.save()
+
+        # Delete the profile
         self.object.delete()
-        return Response({"status": "success"}, status=status.HTTP_200_OK)
+        return Response({"status": "User deleted successfully"}, status=status.HTTP_200_OK)
 
 
 # check_header not working
