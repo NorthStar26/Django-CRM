@@ -322,8 +322,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
-DOMAIN_NAME = os.getenv("DOMAIN_NAME")
-
+DOMAIN_NAME = os.environ.get("DOMAIN_NAME", "http://localhost:8000")
+FRONTEND_DOMAIN_NAME = os.environ.get("FRONTEND_DOMAIN_NAME", "http://localhost:3000")
 
 SIMPLE_JWT = {
     #'ACCESS_TOKEN_LIFETIME': timedelta(minutes=1),
