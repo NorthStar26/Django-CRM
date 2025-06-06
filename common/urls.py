@@ -14,6 +14,7 @@ urlpatterns = [
         name="token_refresh",
     ),
     # GoogleLoginView
+    path("auth/login/", jwt_views.TokenObtainPairView.as_view(), name="token_obtain_pair"),  # autenticate with username and password
     path("auth/google/", views.GoogleLoginView.as_view()),
     path("org/", views.OrgProfileCreateView.as_view()),
     path("profile/", views.ProfileView.as_view()),

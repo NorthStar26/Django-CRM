@@ -110,6 +110,8 @@ class CreateContactSerializer(serializers.ModelSerializer):
             "linked_in_url",
             "facebook_url",
             "twitter_username",
+            #"teams",        # 
+            #"assigned_to",  # 
         )
 
 
