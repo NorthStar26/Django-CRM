@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 @app.task(bind=True, max_retries=3)
 def send_email_to_new_user(self, user_id):
     """Send Mail To Users When their account is created"""
-    print(f"[Celery] send_email_to_new_user triggered for user_id={user_id}")
+    logger.info(f"[Celery] send_email_to_new_user triggered for user_id={user_id}")
     try:
         user_obj = User.objects.filter(id=user_id).first()
         if not user_obj:
-            print(f"[Celery] User with id {user_id} not found")
+            logger.error(f"[Celery] User with id {user_id} not found")
             raise ValueError(f"User with id {user_id} not found")
 
         context = {}
@@ -59,9 +59,11 @@ def send_email_to_new_user(self, user_id):
         )
         msg.content_subtype = "html"
         msg.send()
-        print(f"[Celery] Welcome email sent to {user_email}")
+        logger.info(f"[Celery] Welcome email sent to {user_email}")
     except Exception as exc:
-        print(f"[Celery] Error sending welcome email to user_id={user_id}: {exc}")
+        logger.error(
+            f"[Celery] Error sending welcome email to user_id={user_id}: {exc}"
+        )
         # Retry task in case of error, with exponential backoff
         self.retry(exc=exc, countdown=2**self.request.retries)
 

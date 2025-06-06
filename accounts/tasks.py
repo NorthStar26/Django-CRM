@@ -29,8 +29,7 @@ def send_email(email_obj_id):
                     "email": contact_obj.primary_email
                     if contact_obj.primary_email
                     else "",
-                    "name": (contact_obj.first_name or "")
-                    + (" " + contact_obj.last_name if contact_obj.last_name else ""),
+                    "name": f"{contact_obj.first_name or ''} {contact_obj.last_name or ''}",
                 }
                 try:
                     html_content = Template(html).render(Context(context_data))
