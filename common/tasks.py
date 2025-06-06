@@ -12,7 +12,7 @@ import logging
 from common.models import Comment, User
 from common.token_generator import account_activation_token
 
-app = Celery("crm")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 logger = logging.getLogger(__name__)
 
