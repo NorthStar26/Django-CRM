@@ -1,7 +1,8 @@
 import json
 import secrets
 from multiprocessing import context
-# from re import template
+from re import template
+
 
 import requests
 from django.contrib.auth.base_user import BaseUserManager
@@ -13,7 +14,7 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.db.models import Q
-from django.http.response import JsonResponse
+from django.http.response import JsonResponse, Http404
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.encoding import force_str
@@ -66,6 +67,16 @@ from opportunity.models import Opportunity
 from opportunity.serializer import OpportunitySerializer
 from teams.models import Teams
 from teams.serializer import TeamsSerializer
+
+
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_decode
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from common.models import User
+from common.serializer import  SetPasswordSerializer # added
 
 
 class GetTeamsAndUsersView(APIView):
@@ -123,13 +134,13 @@ class UsersListView(APIView, LimitOffsetPagination):
                 if address_serializer.is_valid():
                     address_obj = address_serializer.save()
                     user = user_serializer.save(
-                        is_active=True,
+                        is_active=False,  # User is created inactive by default
                     )
                     user.email = user.email
                     user.save()
-                    # if params.get("password"):
-                    #     user.set_password(params.get("password"))
-                    #     user.save()
+                    # if params.get("password"):   #  
+                    #     user.set_password(params.get("password"))#  
+                    #     user.save()#  
                     profile = Profile.objects.create(
                         user=user,
                         date_of_joining=timezone.now(),
@@ -936,3 +947,57 @@ class GoogleLoginView(APIView):
         response["refresh_token"] = str(token)
         response["user_id"] = user.id
         return Response(response)
+
+class SetPasswordView(APIView):
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        description="Set password for user with email and activation key",
+        parameters=swagger_params1.set_password_params,  # Adding Header Parameters
+        request=SetPasswordSerializer,
+        responses={200: {"description": "Password set successfully"}}
+    )
+    def post(self, request):
+        """Setting a password for a user using email and activation code"""
+        serializer = SetPasswordSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            activation_key = request.META.get('HTTP_ACTIVATION_KEY')
+            if not activation_key:
+                return Response(
+                    {"error": True, "errors": "Activation key is required in header"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            #activation_key = serializer.validated_data['activation_key']
+            password = serializer.validated_data['password']
+            
+            try:
+                user = User.objects.get(email=email)
+                
+                # Check the activation key
+                if user.activation_key != activation_key:
+                    return Response({
+                        "success": False,
+                        "message": "Invalid activation key."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Set a password and activate the user
+                user.set_password(password)
+                user.is_active = True
+                user.activation_key = None  # Reset the activation key
+                user.save()
+                
+                return Response({
+                    "success": True,
+                    "message": "The password has been set successfully. You can now log in."
+                }, status=status.HTTP_200_OK)
+                
+            except User.DoesNotExist:
+                return Response({
+                    "success": False,
+                    "message": "User with this email not found."
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

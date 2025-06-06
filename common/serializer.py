@@ -155,7 +155,20 @@ class CreateUserSerializer(serializers.ModelSerializer):
         if not Profile.objects.filter(user__email=email.lower(), org=self.org).exists():
             return email
         raise serializers.ValidationError("Given Email id already exists")
-
+     
+    def create(self, validated_data):
+        """
+            Override user creation to use UserManager
+        """
+       # Extract is_active from validated_data
+        is_active = validated_data.pop('is_active', False)
+        
+        # Use create_user instead of create for automatic generation activation_key
+        user = User.objects.create_user(
+            is_active=is_active,
+            **validated_data
+        )
+        return user
 
 class CreateProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -377,3 +390,54 @@ class UserUpdateStatusSwaggerSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices = STATUS_CHOICES,required=True)
 
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+
+class SetPasswordSerializer(serializers.Serializer):
+    """setting a password by email and activation code"""
+    email = serializers.EmailField(
+        required=True,
+        help_text="User's email"
+    )
+    # activation_key = serializers.CharField(
+    #     required=True,
+    #     help_text="Activation key sent to the user's email"
+    # )
+    password = serializers.CharField(
+        required=True, 
+        write_only=True, 
+        style={'input_type': 'password'},
+        help_text="New Password"
+    )
+    confirm_password = serializers.CharField(
+        required=True, 
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="Confirm new password"
+    )
+    
+    def validate_password(self, value):
+        """Checking password strength"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e))
+        return value
+    
+    def validate(self, attrs):
+        """Checking if passwords match and user exists"""
+        if attrs.get('password') != attrs.get('confirm_password'):
+            raise serializers.ValidationError({
+                "confirm_password": "Passwords don't match"
+            })
+        
+        #Checking if a user with such email exists
+        email = attrs.get('email')
+        try:
+            User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({
+                "email": "User with this email not found"
+            })
+            
+        return attrs
