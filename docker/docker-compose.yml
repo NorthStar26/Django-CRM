@@ -3,11 +3,7 @@ services:
   crm-app:
     image: djcrm:1
     container_name: crm-app
-<<<<<<< Updated upstream
-    entrypoint: []
-=======
     entrypoint: [] # Override the entrypoint
->>>>>>> Stashed changes
     command: bash -c "sleep 10 && cd /app && python3 manage.py collectstatic --noinput && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
     environment:
       - DBNAME=postgres
