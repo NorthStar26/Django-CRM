@@ -5,7 +5,6 @@ services:
       context: ..
       dockerfile: docker/dockerfile
     container_name: crm-app
-    entrypoint: []
     command: bash -c "sleep 10 && cd /app && python3 manage.py collectstatic --noinput && python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
     environment:
       - DBNAME=postgres
@@ -24,7 +23,6 @@ services:
       - SECRET_KEY=your-secret-key
       - ENV_TYPE=dev
       - SWAGGER_ROOT_URL=http://localhost:8000
-
     depends_on:
       - crm-db
       - mailhog
@@ -33,7 +31,11 @@ services:
       - 8000:8000
     networks:
       - nw
-      
+    volumes:
+      - ../:/app
+      - ../static:/app/static
+      - ../staticfiles:/app/staticfiles
+
   mailhog:
     image: mailhog/mailhog
     container_name: crm-mailhog
@@ -70,7 +72,6 @@ services:
       context: ..
       dockerfile: docker/dockerfile
     container_name: crm-celery
-    entrypoint: []
     command: bash -c "cd /app && celery -A crm worker --loglevel=info"
     environment:
       - DBNAME=postgres
@@ -95,6 +96,10 @@ services:
       - mailhog
     networks:
       - nw
+    volumes:
+      - ../:/app
+      - ../static:/app/static
+      - ../staticfiles:/app/staticfiles
 
 networks:
   nw: {}
