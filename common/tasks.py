@@ -176,13 +176,9 @@ def send_email_user_status(
             msg.send()
 
 
-@app.task
-def send_email_user_delete(
-    user_email,
-    deleted_by="",
-):
+@app.task(bind=True, max_retries=3)
+def send_email_user_delete(self, user_email, deleted_by=""):
     """Send Mail To Users When their account is deleted"""
-
     if user_email:
         context = {}
         context["message"] = "deleted"
@@ -207,6 +203,8 @@ def send_email_user_delete(
                 logger.error(
                     f"[Celery] Failed to send deletion email to {user_email}: {e}"
                 )
+                # Retry task in case of error, with exponential backoff
+                self.retry(exc=e, countdown=2**self.request.retries)
 
 
 @app.task
