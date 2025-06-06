@@ -22,13 +22,12 @@ def send_email_to_new_user(self, user_id):
     """Send Mail To Users When their account is created"""
     logger.info(f"[Celery] send_email_to_new_user triggered for user_id={user_id}")
     try:
+        context = {}
         user_obj = User.objects.filter(id=user_id).first()
         if not user_obj:
             logger.error(f"[Celery] User with id {user_id} not found")
             raise ValueError(f"User with id {user_id} not found")
 
-        context = {}
-        user_email = user_obj.email
         context["url"] = settings.DOMAIN_NAME
         context["uid"] = (urlsafe_base64_encode(force_bytes(user_obj.pk)),)
         context["token"] = account_activation_token.make_token(user_obj)
@@ -47,7 +46,7 @@ def send_email_to_new_user(self, user_id):
             context["token"],
             activation_key,
         )
-        recipients = [user_email]
+        recipients = [user_obj.email]
         subject = "Welcome to Bottle CRM"
         html_content = render_to_string("user_status_in.html", context=context)
 
@@ -59,7 +58,7 @@ def send_email_to_new_user(self, user_id):
         )
         msg.content_subtype = "html"
         msg.send()
-        logger.info(f"[Celery] Welcome email sent to {user_email}")
+        logger.info(f"[Celery] Welcome email sent to {user_obj.email}")
     except Exception as exc:
         logger.error(
             f"[Celery] Error sending welcome email to user_id={user_id}: {exc}"
