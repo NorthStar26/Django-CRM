@@ -13,6 +13,14 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     wkhtmltopdf \
     less \
+    git \
+    nodejs \
+    npm \
+    ruby \
+    ruby-dev \
+    redis-server \
+    && npm install -g less \
+    && gem install sass compass \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
