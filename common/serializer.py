@@ -413,7 +413,7 @@ class SetPasswordSerializer(serializers.Serializer):
         required=True, 
         write_only=True,
         style={'input_type': 'password'},
-        help_text="Confirm new passwordя"
+        help_text="Confirm new password"
     )
     
     def validate_password(self, value):
