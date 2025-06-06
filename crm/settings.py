@@ -308,7 +308,10 @@ SWAGGER_SETTINGS = {
     },
 }
 
-CORS_ALLOW_HEADERS = default_headers + ("org",)
+CORS_ALLOW_HEADERS = default_headers + (
+    "org",
+    "activation-key",
+)
 CORS_ORIGIN_ALLOW_ALL = True
 CSRF_TRUSTED_ORIGINS = ["https://*.runcode.io", "http://*"]
 
