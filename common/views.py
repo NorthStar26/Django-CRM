@@ -303,9 +303,7 @@ class UserDetailView(APIView):
             # Send status change email after profile update
             from common.tasks import send_email_user_status
 
-            send_email_user_status.delay(
-                profile.user.id, status_changed_user=request.user.email
-            )
+            send_email_user_status.delay(profile.user.id, request.user.email)
             return Response(
                 {"error": False, "message": "User Updated Successfully"},
                 status=status.HTTP_200_OK,
