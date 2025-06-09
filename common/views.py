@@ -358,7 +358,11 @@ class UserDetailView(APIView):
         user.save()
 
         # Delete the profile
-        self.object.delete()
+        # self.object.delete()
+
+        # Deactivate the profile
+        self.object.is_active = False
+        self.object.save()
         return Response({"status": "User deleted successfully"}, status=status.HTTP_200_OK)
 
 
