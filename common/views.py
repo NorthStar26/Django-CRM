@@ -324,7 +324,7 @@ class UserDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-### Delete User Profile and Deactivate User Account
+### Deactivate (Delete) User Profile and Deactivate User Account
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
@@ -363,7 +363,7 @@ class UserDetailView(APIView):
         # Deactivate the profile
         self.object.is_active = False
         self.object.save()
-        return Response({"status": "User deleted successfully"}, status=status.HTTP_200_OK)
+        return Response({"status": "User deactivated successfully"}, status=status.HTTP_200_OK)
 
 
 # check_header not working
