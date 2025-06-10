@@ -2,7 +2,8 @@ import json
 import secrets
 from multiprocessing import context
 from re import template
-
+from django_ratelimit.decorators import ratelimit
+from django_ratelimit.exceptions import Ratelimited
 
 import requests
 from django.contrib.auth.base_user import BaseUserManager
@@ -78,6 +79,28 @@ from rest_framework.permissions import AllowAny
 from common.models import User
 from common.serializer import  SetPasswordSerializer # added
 
+from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.views import TokenObtainPairView
+from common.utils import ratelimit_error_handler
+from django_ratelimit.decorators import ratelimit
+from django.http import HttpResponse
+from rest_framework import status
+import json
+from common.serializer import CustomTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    @method_decorator(ratelimit(key='ip', rate='5/m', block=True))
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps({"detail": "Too many login attempts. Please try again later."}),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
 
 class GetTeamsAndUsersView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -147,7 +170,10 @@ class UsersListView(APIView, LimitOffsetPagination):
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
-                    )
+                        phone=params.get("phone"),               # Добавила
+                        alternate_phone=params.get("alternate_phone")  # Добила
+)
+                    
                     send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},

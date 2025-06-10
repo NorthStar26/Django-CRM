@@ -6,6 +6,10 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+from common.models import User  # Убедитесь, что импорт User правильный
+
 
 from common.models import (
     Address,
@@ -441,3 +445,27 @@ class SetPasswordSerializer(serializers.Serializer):
             })
             
         return attrs
+    
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Проверяем существование пользователя с таким email
+        email = attrs.get('email')
+        try:
+            User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({
+                "email": "User with this email not found"
+            })
+        
+        # Если пользователь существует, вызываем стандартную валидацию
+        try:
+            return super().validate(attrs)
+        except serializers.ValidationError as e:
+            # Если пароль неверный, возвращаем специфичную ошибку
+            if 'detail' in e.detail:
+                raise serializers.ValidationError({
+                    "password": "Invalid password"
+                })
+            raise e    

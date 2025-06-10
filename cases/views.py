@@ -24,6 +24,7 @@ from contacts.serializer import ContactSerializer
 from teams.models import Teams
 
 
+
 class CaseListView(APIView, LimitOffsetPagination):
     #authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
