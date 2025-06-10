@@ -8,7 +8,7 @@ import json
 
 def ratelimit_error_handler(request, exception=None):
     """Return 429 instead of 403"""
-    print("ВЫЗВАНА ФУНКЦИЯ RATELIMIT_ERROR_HANDLER!")  # Отладочное сообщение
+    print("RATELIMIT_ERROR_HANDLER FUNCTION CALLED!")  
     print(f"Параметры: request={request}, exception={exception}")
     return HttpResponse(
         json.dumps({"detail": "Too many login attempts. Please try again later."}),

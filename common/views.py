@@ -170,8 +170,8 @@ class UsersListView(APIView, LimitOffsetPagination):
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
-                        phone=params.get("phone"),               # Добавила
-                        alternate_phone=params.get("alternate_phone")  # Добила
+                        phone=params.get("phone"),               
+                        alternate_phone=params.get("alternate_phone")  
 )
                     
                     send_email_to_new_user.delay(user.id)

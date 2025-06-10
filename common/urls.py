@@ -15,8 +15,9 @@ urlpatterns = [
     ),
     # GoogleLoginView
     #path("auth/login/", jwt_views.TokenObtainPairView.as_view(), name="token_obtain_pair"),  # autenticate with username and password
-    path("auth/logout/", jwt_views.TokenBlacklistView.as_view(), name="token_blacklist"),
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/logout/", jwt_views.TokenBlacklistView.as_view(), name="token_blacklist"),
+  
 
     path("auth/google/", views.GoogleLoginView.as_view()),
     path("auth/set-password/", views.SetPasswordView.as_view(), name="set_password"),

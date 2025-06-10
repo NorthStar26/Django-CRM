@@ -8,7 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
-from common.models import User  # Убедитесь, что импорт User правильный
+from common.models import User  
 
 
 from common.models import (
@@ -450,7 +450,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Проверяем существование пользователя с таким email
+      # Check the existence of a user with such email
         email = attrs.get('email')
         try:
             User.objects.get(email=email)
@@ -459,11 +459,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "email": "User with this email not found"
             })
         
-        # Если пользователь существует, вызываем стандартную валидацию
+# If the user exists, call the standard validation
         try:
             return super().validate(attrs)
         except serializers.ValidationError as e:
-            # Если пароль неверный, возвращаем специфичную ошибку
+         # If the password is incorrect, return a specific error
             if 'detail' in e.detail:
                 raise serializers.ValidationError({
                     "password": "Invalid password"

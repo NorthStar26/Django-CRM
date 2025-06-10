@@ -356,8 +356,9 @@ SIMPLE_JWT = {
 }
 # it is needed in custome middlewere to get the user from the token
 JWT_ALGO = "HS256"
-# Настройки для django_ratelimit
 
+
+# settings django_ratelimit
 RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
 DOMAIN_NAME = os.environ["DOMAIN_NAME"]
 SWAGGER_ROOT_URL = os.environ["SWAGGER_ROOT_URL"]
