@@ -3,6 +3,8 @@ from datetime import timedelta
 
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
+import sys
+print(f"PYTHON PATH: {sys.executable}")
 
 # JWT_AUTH = {
 #     'JWT_PAYLOAD_GET_USERNAME_HANDLER':
@@ -61,6 +63,8 @@ INSTALLED_APPS = [
     "phonenumber_field",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist", # to blacklist tokens
+    "django_ratelimit",
     "corsheaders",
     "django_ses",
     "drf_spectacular",
@@ -134,6 +138,15 @@ DATABASES = {
 }
 
 
+
+
+# Добавила:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/1"),
+    }
+}
 # Password validation
 # https://docs.djangoproject.com/en/1.10/ref/settings/#auth-password-validators
 
@@ -345,5 +358,7 @@ SIMPLE_JWT = {
 JWT_ALGO = "HS256"
 
 
+# settings django_ratelimit
+RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
 DOMAIN_NAME = os.environ["DOMAIN_NAME"]
 SWAGGER_ROOT_URL = os.environ["SWAGGER_ROOT_URL"]
