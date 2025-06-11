@@ -266,6 +266,7 @@ docker-compose -f docker/docker-compose.yml up -d
 - [ ] Run `docker-compose -f docker/docker-compose.yml up -d crm-db redis mailhog`
 - [ ] Create `.env` file with connection settings
 - [ ] Run `python manage.py migrate` and `python manage.py runserver`
+- [ ] Then **Windows:** celery -A crm worker --loglevel=info --pool=solo **Mac/Linux:**celery -A crm worker --loglevel=info
 - [ ] Test email functionality
 
 **Need Help?**
