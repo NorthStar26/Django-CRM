@@ -47,10 +47,10 @@ docker-compose -f docker/docker-compose.yml up -d crm-db redis mailhog
 
 ```bash
 # Apply migrations (required before first run or after model changes)
-python manage.py migrate  
+python manage.py migrate
 
 # (Optional) Create an admin user Django not for organization
-python manage.py createsuperuser  
+python manage.py createsuperuser
 
 #Run Django locally
 python manage.py runserver

@@ -2,6 +2,20 @@ import pytz
 from django.utils.translation import gettext_lazy as _
 
 
+from django.http import HttpResponse
+from rest_framework import status
+import json
+
+def ratelimit_error_handler(request, exception=None):
+    """Return 429 instead of 403"""
+    print("RATELIMIT_ERROR_HANDLER FUNCTION CALLED!")  
+    print(f"Параметры: request={request}, exception={exception}")
+    return HttpResponse(
+        json.dumps({"detail": "Too many login attempts. Please try again later."}),
+        content_type="application/json",
+        status=status.HTTP_429_TOO_MANY_REQUESTS
+    )
+
 def jwt_payload_handler(user):
     """Custom payload handler
     Token encrypts the dictionary returned by this function, and can be
