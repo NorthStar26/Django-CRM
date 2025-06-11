@@ -1,7 +1,6 @@
 import json
 import secrets
 from multiprocessing import context
-from re import template
 from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
@@ -77,7 +76,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from common.models import User
-from common.serializer import  SetPasswordSerializer # added
+from common.serializer import SetPasswordSerializer  # added
 
 from django.utils.decorators import method_decorator
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -88,17 +87,21 @@ from rest_framework import status
 import json
 from common.serializer import CustomTokenObtainPairSerializer
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-    @method_decorator(ratelimit(key='ip', rate='5/m', block=True))
+
+    @method_decorator(ratelimit(key="ip", rate="5/m", block=True))
     def post(self, request, *args, **kwargs):
         try:
             return super().post(request, *args, **kwargs)
         except Ratelimited:
             return HttpResponse(
-                json.dumps({"detail": "Too many login attempts. Please try again later."}),
+                json.dumps(
+                    {"detail": "Too many login attempts. Please try again later."}
+                ),
                 content_type="application/json",
-                status=status.HTTP_429_TOO_MANY_REQUESTS
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
 
@@ -161,19 +164,19 @@ class UsersListView(APIView, LimitOffsetPagination):
                     )
                     user.email = user.email
                     user.save()
-                    # if params.get("password"):   #  
-                    #     user.set_password(params.get("password"))#  
-                    #     user.save()#  
+                    # if params.get("password"):   #
+                    #     user.set_password(params.get("password"))#
+                    #     user.save()#
                     profile = Profile.objects.create(
                         user=user,
                         date_of_joining=timezone.now(),
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
-                        phone=params.get("phone"),               
-                        alternate_phone=params.get("alternate_phone")  
-)
-                    
+                        phone=params.get("phone"),
+                        alternate_phone=params.get("alternate_phone"),
+                    )
+
                     send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
@@ -350,7 +353,7 @@ class UserDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-### Deactivate (Delete) User Profile and Deactivate User Account
+    ### Deactivate (Delete) User Profile and Deactivate User Account
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
@@ -360,7 +363,7 @@ class UserDetailView(APIView):
                 {"error": True, "errors": "Permission Denied"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         # Get the user profile
         self.object = self.get_object(pk)
 
@@ -370,7 +373,7 @@ class UserDetailView(APIView):
                 {"error": True, "errors": "You cannot delete yourself."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         # Send email
         deleted_by = self.request.profile.user.email
         send_email_user_delete.delay(
@@ -389,7 +392,9 @@ class UserDetailView(APIView):
         # Deactivate the profile
         self.object.is_active = False
         self.object.save()
-        return Response({"status": "User deactivated successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"status": "User deactivated successfully"}, status=status.HTTP_200_OK
+        )
 
 
 # check_header not working
@@ -994,56 +999,60 @@ class GoogleLoginView(APIView):
         response["user_id"] = user.id
         return Response(response)
 
+
 class SetPasswordView(APIView):
     permission_classes = [AllowAny]
-    
+
     @extend_schema(
         description="Set password for user with email and activation key",
         parameters=swagger_params1.set_password_params,  # Adding Header Parameters
         request=SetPasswordSerializer,
-        responses={200: {"description": "Password set successfully"}}
+        responses={200: {"description": "Password set successfully"}},
     )
     def post(self, request):
         """Setting a password for a user using email and activation code"""
         serializer = SetPasswordSerializer(data=request.data)
-        
+
         if serializer.is_valid():
-            email = serializer.validated_data['email']
-            activation_key = request.META.get('HTTP_ACTIVATION_KEY')
+            email = serializer.validated_data["email"]
+            activation_key = request.META.get("HTTP_ACTIVATION_KEY")
             if not activation_key:
                 return Response(
                     {"error": True, "errors": "Activation key is required in header"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-                
-            #activation_key = serializer.validated_data['activation_key']
-            password = serializer.validated_data['password']
-            
+
+            # activation_key = serializer.validated_data['activation_key']
+            password = serializer.validated_data["password"]
+
             try:
                 user = User.objects.get(email=email)
-                
+
                 # Check the activation key
                 if user.activation_key != activation_key:
-                    return Response({
-                        "success": False,
-                        "message": "Invalid activation key."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
+                    return Response(
+                        {"success": False, "message": "Invalid activation key."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 # Set a password and activate the user
                 user.set_password(password)
                 user.is_active = True
                 user.activation_key = None  # Reset the activation key
                 user.save()
-                
-                return Response({
-                    "success": True,
-                    "message": "The password has been set successfully. You can now log in."
-                }, status=status.HTTP_200_OK)
-                
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "The password has been set successfully. You can now log in.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
             except User.DoesNotExist:
-                return Response({
-                    "success": False,
-                    "message": "User with this email not found."
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
+                return Response(
+                    {"success": False, "message": "User with this email not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
