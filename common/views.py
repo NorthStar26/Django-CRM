@@ -185,6 +185,13 @@ class UsersListView(APIView, LimitOffsetPagination):
 
     @extend_schema(parameters=swagger_params1.user_list_params)
     def get(self, request, format=None):
+        org_id = request.headers.get("org")
+        if not org_id:
+            return Response(
+                {"error": True, "errors": "Organization ID is required in the header."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
             return Response(
                 {"error": True, "errors": "Permission Denied"},
