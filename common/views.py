@@ -1,4 +1,5 @@
 import json
+from operator import is_
 import secrets
 from multiprocessing import context
 from django_ratelimit.decorators import ratelimit
@@ -173,10 +174,10 @@ class UsersListView(APIView, LimitOffsetPagination):
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
-                        phone=params.get("phone"),
-                        alternate_phone=params.get("alternate_phone"),
-                    )
-
+                        phone=params.get("phone"),               
+                        alternate_phone=params.get("alternate_phone"),  
+                        is_active = False,  # Profile is created inactive by default
+        )                   
                     send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
@@ -204,9 +205,21 @@ class UsersListView(APIView, LimitOffsetPagination):
                 queryset = queryset.filter(user__email__icontains=params.get("email"))
             if params.get("role"):
                 queryset = queryset.filter(role=params.get("role"))
+            # if params.get("status"):
+            #     queryset = queryset.filter(is_active=params.get("status"))
             if params.get("status"):
-                queryset = queryset.filter(is_active=params.get("status"))
-
+                status_param = params.get("status")
+                if status_param == "Active":
+                    queryset = queryset.filter(is_active=True)
+                elif status_param == "In Active" or status_param == "Inactive":
+                    queryset = queryset.filter(is_active=False)
+                else:
+            #
+                    try:
+                        is_active = status_param.lower() == 'true'
+                        queryset = queryset.filter(is_active=is_active)
+                    except:
+                      pass  
         context = {}
         queryset_active_users = queryset.filter(is_active=True)
         results_active_users = self.paginate_queryset(
