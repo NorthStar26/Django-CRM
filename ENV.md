@@ -33,12 +33,12 @@ SWAGGER_ROOT_URL=""
 MEMCACHELOCATION=""
 
 # Email
-EMAIL_HOST=localhost
-EMAIL_PORT=1025
-EMAIL_USE_TLS=False
-EMAIL_USE_SSL=False
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST="localhost"
+EMAIL_PORT="1025"
+EMAIL_USE_TLS="False"
+EMAIL_USE_SSL="False"
+EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST_USER=
 EMAIL_HOST_PASSWORD=
-DEFAULT_FROM_EMAIL=crm@example.com
-ADMIN_EMAIL=admin@example.com
+DEFAULT_FROM_EMAIL="crm@example.com"
+ADMIN_EMAIL="admin@example.com"
