@@ -1075,7 +1075,7 @@ class SetPasswordView(APIView):
                     )
                 except Profile.DoesNotExist:
                     return Response(
-                        {"success": False, "message": "Profile with this email not found."},
+                        {"success": False, "message": "Profile for this user not found."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             except User.DoesNotExist:
