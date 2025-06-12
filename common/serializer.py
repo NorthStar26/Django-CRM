@@ -8,7 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
-from common.models import User  
+from common.models import User
 
 
 from common.models import (
@@ -26,7 +26,7 @@ from common.models import (
 class OrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Org
-        fields = ("id", "name","api_key")
+        fields = ("id", "name", "api_key")
 
 
 class SocialLoginSerializer(serializers.Serializer):
@@ -65,7 +65,6 @@ class LeadCommentSerializer(serializers.ModelSerializer):
         )
 
 
-
 class OrgProfileCreateSerializer(serializers.ModelSerializer):
     """
     It is for creating organization
@@ -76,9 +75,7 @@ class OrgProfileCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Org
         fields = ["name"]
-        extra_kwargs = {
-            "name": {"required": True}
-        }
+        extra_kwargs = {"name": {"required": True}}
 
     def validate_name(self, name):
         if bool(re.search(r"[~\!_.@#\$%\^&\*\ \(\)\+{}\":;'/\[\]]", name)):
@@ -112,14 +109,14 @@ class ShowOrganizationListSerializer(serializers.ModelSerializer):
 
 
 class BillingAddressSerializer(serializers.ModelSerializer):
-    country = serializers.SerializerMethodField()
+    country_display = serializers.SerializerMethodField()
 
-    def get_country(self, obj):
+    def get_country_display(self, obj):
         return obj.get_country_display()
 
     class Meta:
         model = Address
-        fields = ("address_line", "street", "city", "state", "postcode", "country")
+        fields = ("address_line", "street", "city", "state", "postcode", "country", "country_display")
 
     def __init__(self, *args, **kwargs):
         account_view = kwargs.pop("account", False)
@@ -136,7 +133,6 @@ class BillingAddressSerializer(serializers.ModelSerializer):
 
 
 class CreateUserSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = User
         fields = (
@@ -159,20 +155,18 @@ class CreateUserSerializer(serializers.ModelSerializer):
         if not Profile.objects.filter(user__email=email.lower(), org=self.org).exists():
             return email
         raise serializers.ValidationError("Given Email id already exists")
-     
+
     def create(self, validated_data):
         """
-            Override user creation to use UserManager
+        Override user creation to use UserManager
         """
-       # Extract is_active from validated_data
-        is_active = validated_data.pop('is_active', False)
-        
+        # Extract is_active from validated_data
+        is_active = validated_data.pop("is_active", False)
+
         # Use create_user instead of create for automatic generation activation_key
-        user = User.objects.create_user(
-            is_active=is_active,
-            **validated_data
-        )
+        user = User.objects.create_user(is_active=is_active, **validated_data)
         return user
+
 
 class CreateProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -194,14 +188,15 @@ class CreateProfileSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = User
-        fields = ["id","email","profile_pic"]
+        fields = ["id", "email", "profile_pic"]
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    # address = BillingAddressSerializer()
+    address = BillingAddressSerializer(
+        read_only=True
+    )  # Add this line to serialize address details
 
     class Meta:
         model = Profile
@@ -213,6 +208,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "has_marketing_access",
             "has_sales_access",
             "phone",
+            "alternate_phone",
             "date_of_joining",
             "is_active",
         )
@@ -337,6 +333,7 @@ class APISettingsListSerializer(serializers.ModelSerializer):
             "org",
         ]
 
+
 class APISettingsSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = APISettings
@@ -358,68 +355,65 @@ class DocumentCreateSwaggerSerializer(serializers.ModelSerializer):
             "shared_to",
         ]
 
+
 class DocumentEditSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = [
-            "title",
-            "document_file",
-            "teams",
-            "shared_to",
-            "status"
-        ]
+        fields = ["title", "document_file", "teams", "shared_to", "status"]
 
 
 class UserCreateSwaggerSerializer(serializers.Serializer):
     """
     It is swagger for creating or updating user
     """
+
     ROLE_CHOICES = ["ADMIN", "USER"]
 
-    email = serializers.CharField(max_length=1000,required=True)
-    role = serializers.ChoiceField(choices = ROLE_CHOICES,required=True)
+    email = serializers.CharField(max_length=1000, required=True)
+    role = serializers.ChoiceField(choices=ROLE_CHOICES, required=True)
     phone = serializers.CharField(max_length=12)
     alternate_phone = serializers.CharField(max_length=12)
-    address_line = serializers.CharField(max_length=10000,required=True)
+    address_line = serializers.CharField(max_length=10000, required=True)
     street = serializers.CharField(max_length=1000)
     city = serializers.CharField(max_length=1000)
     state = serializers.CharField(max_length=1000)
-    pincode = serializers.CharField(max_length=1000)
+    postcode = serializers.CharField(
+        max_length=1000
+    )  # Changed from pincode to postcode
     country = serializers.CharField(max_length=1000)
 
-class UserUpdateStatusSwaggerSerializer(serializers.Serializer):
 
+class UserUpdateStatusSwaggerSerializer(serializers.Serializer):
     STATUS_CHOICES = ["Active", "Inactive"]
 
-    status = serializers.ChoiceField(choices = STATUS_CHOICES,required=True)
+    status = serializers.ChoiceField(choices=STATUS_CHOICES, required=True)
 
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
+
 class SetPasswordSerializer(serializers.Serializer):
     """setting a password by email and activation code"""
-    email = serializers.EmailField(
-        required=True,
-        help_text="User's email"
-    )
+
+    email = serializers.EmailField(required=True, help_text="User's email")
     # activation_key = serializers.CharField(
     #     required=True,
     #     help_text="Activation key sent to the user's email"
     # )
     password = serializers.CharField(
-        required=True, 
-        write_only=True, 
-        style={'input_type': 'password'},
-        help_text="New Password"
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="New Password",
     )
     confirm_password = serializers.CharField(
-        required=True, 
+        required=True,
         write_only=True,
-        style={'input_type': 'password'},
-        help_text="Confirm new password"
+        style={"input_type": "password"},
+        help_text="Confirm new password",
     )
-    
+
     def validate_password(self, value):
         """Checking password strength"""
         try:
@@ -427,45 +421,45 @@ class SetPasswordSerializer(serializers.Serializer):
         except ValidationError as e:
             raise serializers.ValidationError(list(e))
         return value
-    
+
     def validate(self, attrs):
         """Checking if passwords match and user exists"""
-        if attrs.get('password') != attrs.get('confirm_password'):
-            raise serializers.ValidationError({
-                "confirm_password": "Passwords don't match"
-            })
-        
-        #Checking if a user with such email exists
-        email = attrs.get('email')
+        if attrs.get("password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords don't match"}
+            )
+
+        # Checking if a user with such email exists
+        email = attrs.get("email")
         try:
             User.objects.get(email=email)
         except User.DoesNotExist:
-            raise serializers.ValidationError({
-                "email": "User with this email not found"
-            })
-            
+            raise serializers.ValidationError(
+                {"email": "User with this email not found"}
+            )
+
         return attrs
-    
+
+
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-      # Check the existence of a user with such email
-        email = attrs.get('email')
+        # Check the existence of a user with such email
+        email = attrs.get("email")
         try:
             User.objects.get(email=email)
         except User.DoesNotExist:
-            raise serializers.ValidationError({
-                "email": "User with this email not found"
-            })
-        
-# If the user exists, call the standard validation
+            raise serializers.ValidationError(
+                {"email": "User with this email not found"}
+            )
+
+        # If the user exists, call the standard validation
         try:
             return super().validate(attrs)
         except serializers.ValidationError as e:
-         # If the password is incorrect, return a specific error
-            if 'detail' in e.detail:
-                raise serializers.ValidationError({
-                    "password": "Invalid password"
-                })
-            raise e    
+            # If the password is incorrect, return a specific error
+            if "detail" in e.detail:
+                raise serializers.ValidationError({"password": "Invalid password"})
+            raise e

@@ -360,6 +360,10 @@ class UserDetailView(APIView):
             user.save()
         if profile_serializer.is_valid():
             profile = profile_serializer.save()
+            # Link the address to the profile if it was newly created or updated
+            if profile.address != address_obj:
+                profile.address = address_obj
+                profile.save()
             # Send status change email after profile update
             from common.tasks import send_email_user_status
 
