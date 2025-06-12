@@ -1042,7 +1042,6 @@ class SetPasswordView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # activation_key = serializer.validated_data['activation_key']
             password = serializer.validated_data["password"]
 
             try:
@@ -1057,22 +1056,31 @@ class SetPasswordView(APIView):
 
                 # Set a password and activate the user
                 user.set_password(password)
-                user.is_active = True
+                user.is_active = True   
                 user.activation_key = None  # Reset the activation key
                 user.save()
 
-                return Response(
-                    {
-                        "success": True,
-                        "message": "The password has been set successfully. You can now log in.",
-                    },
-                    status=status.HTTP_200_OK,
-                )
+                # Активируем профиль пользователя
+                try:
+                    profile = Profile.objects.get(user=user)
+                    profile.is_active = True  #
+                    profile.save()
 
+                    return Response(
+                        {
+                            "success": True,
+                            "message": "The password has been set successfully. You can now log in.",
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Profile.DoesNotExist:
+                    return Response(
+                        {"success": False, "message": "Profile for this user not found."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             except User.DoesNotExist:
                 return Response(
                     {"success": False, "message": "User with this email not found."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
