@@ -174,10 +174,10 @@ class UsersListView(APIView, LimitOffsetPagination):
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
-                        phone=params.get("phone"),               
-                        alternate_phone=params.get("alternate_phone"),  
-                        is_active = False,  # Profile is created inactive by default
-        )                   
+                        phone=params.get("phone"),
+                        alternate_phone=params.get("alternate_phone"),
+                        is_active=False,  # Profile is created inactive by default
+                    )
                     send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
@@ -214,12 +214,12 @@ class UsersListView(APIView, LimitOffsetPagination):
                 elif status_param == "In Active" or status_param == "Inactive":
                     queryset = queryset.filter(is_active=False)
                 else:
-            #
+                    #
                     try:
-                        is_active = status_param.lower() == 'true'
+                        is_active = status_param.lower() == "true"
                         queryset = queryset.filter(is_active=is_active)
                     except:
-                      pass  
+                        pass
         context = {}
         queryset_active_users = queryset.filter(is_active=True)
         results_active_users = self.paginate_queryset(
@@ -305,7 +305,6 @@ class UserDetailView(APIView):
         context["assigned_data"] = assigned_data
         comments = profile_obj.user_comments.all()
         context["comments"] = CommentSerializer(comments, many=True).data
-        context["countries"] = COUNTRIES
         return Response(
             {"error": False, "data": context},
             status=status.HTTP_200_OK,
@@ -1060,7 +1059,7 @@ class SetPasswordView(APIView):
 
                 # Set a password and activate the user
                 user.set_password(password)
-                user.is_active = True   
+                user.is_active = True
                 user.activation_key = None  # Reset the activation key
                 user.save()
 
@@ -1079,7 +1078,10 @@ class SetPasswordView(APIView):
                     )
                 except Profile.DoesNotExist:
                     return Response(
-                        {"success": False, "message": "Profile for this user not found."},
+                        {
+                            "success": False,
+                            "message": "Profile for this user not found.",
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             except User.DoesNotExist:
