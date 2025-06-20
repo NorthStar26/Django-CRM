@@ -360,6 +360,8 @@ SIMPLE_JWT = {
 # it is needed in custome middlewere to get the user from the token
 JWT_ALGO = "HS256"
 
+# Setting the lifetime of the password reset token (1 day)
+PASSWORD_RESET_TIMEOUT =43200  # seconds 
 
 # settings django_ratelimit
 RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
