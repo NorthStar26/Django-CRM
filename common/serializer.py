@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from common.models import User
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 from common.models import (
@@ -449,9 +450,6 @@ class SetPasswordSerializer(serializers.Serializer):
         return attrs
 
 
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Check the existence of a user with such email
@@ -518,4 +516,37 @@ class ResetPasswordSerializer(serializers.Serializer):
         if not check_password(attrs.get("current_password"), user.password):
             raise serializers.ValidationError({"current_password": "Invalid password"})
 
+
+class ResetPasswordRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(
+        required=True, help_text="User's email to reset password"
+    )
+
+
+class ResetPasswordConfirmSerializer(serializers.Serializer):
+    """Serializer for confirming password reset"""
+
+    uidb64 = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(
+        required=True, write_only=True, style={"input_type": "password"}
+    )
+    confirm_password = serializers.CharField(
+        required=True, write_only=True, style={"input_type": "password"}
+    )
+
+    def validate_password(self, value):
+        """Checking password strength"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e))
+        return value
+
+    def validate(self, attrs):
+        """Checking if passwords match"""
+        if attrs.get("password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords don't match"}
+            )
         return attrs

@@ -1,3 +1,8 @@
 {
-    "python.formatting.provider": "black"
+  "python.formatting.provider": "black",
+  "[django-html]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "batisteo.vscode-django"
+  },
+  "files.trimTrailingWhitespace": true
 }
