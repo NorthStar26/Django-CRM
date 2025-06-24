@@ -116,7 +116,15 @@ class BillingAddressSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Address
-        fields = ("address_line", "street", "city", "state", "postcode", "country", "country_display")
+        fields = (
+            "address_line",
+            "street",
+            "city",
+            "state",
+            "postcode",
+            "country",
+            "country_display",
+        )
 
     def __init__(self, *args, **kwargs):
         account_view = kwargs.pop("account", False)
@@ -463,3 +471,51 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             if "detail" in e.detail:
                 raise serializers.ValidationError({"password": "Invalid password"})
             raise e
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Resetting a password by email and activation code"""
+
+    email = serializers.EmailField(required=True, help_text="User's email")
+
+    current_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="Current Password",
+    )
+
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="New Password",
+    )
+
+    confirm_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="Confirm New Password",
+    )
+
+    def validate(self, attrs):
+        """Checking if passwords match and user exists"""
+        if attrs.get("new_password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords don't match"}
+            )
+
+        # Checking if a user with such email exists
+        email = attrs.get("email")
+        user = User.objects.filter(email=email).first()
+        if not user:
+            raise serializers.ValidationError(
+                {"email": "User with this email not found"}
+            )
+
+        # Checking current password
+        if not check_password(attrs.get("current_password"), user.password):
+            raise serializers.ValidationError({"current_password": "Invalid password"})
+
+        return attrs

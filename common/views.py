@@ -193,11 +193,11 @@ class UsersListView(APIView, LimitOffsetPagination):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
-            return Response(
-                {"error": True, "errors": "Permission Denied"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        #     return Response(
+        #         {"error": True, "errors": "Permission Denied"},
+        #         status=status.HTTP_403_FORBIDDEN,
+        #     )
         queryset = Profile.objects.filter(org=request.profile.org).order_by("-id")
         params = request.query_params
         if params:
@@ -317,6 +317,7 @@ class UserDetailView(APIView):
     )
     def put(self, request, pk, format=None):
         params = request.data
+        print(params)
         profile = self.get_object(pk)
         address_obj = profile.address
         if (
@@ -356,17 +357,23 @@ class UserDetailView(APIView):
             address_obj = address_serializer.save()
             user = serializer.save()
             user.email = user.email
+            # add firstname and lastname update
+            user.first_name = params.get("first_name", "")
+            user.last_name = params.get("last_name", "")
             user.save()
         if profile_serializer.is_valid():
             profile = profile_serializer.save()
             # Link the address to the profile if it was newly created or updated
             if profile.address != address_obj:
                 profile.address = address_obj
-                profile.save()
+                # add alternate phone and phone to profile
+            profile.phone = params.get("phone")
+            profile.alternate_phone = params.get("alternate_phone")
+            profile.save()
             # Send status change email after profile update
             from common.tasks import send_email_user_status
 
-            send_email_user_status.delay(profile.user.id, request.user.email)
+            # send_email_user_status.delay(profile.user.id, request.user.email)
             return Response(
                 {"error": False, "message": "User Updated Successfully"},
                 status=status.HTTP_200_OK,
@@ -1001,6 +1008,11 @@ class GoogleLoginView(APIView):
             user = User()
             user.email = data["email"]
             user.profile_pic = data["picture"]
+            # add first name and last name if available
+            if "given_name" in data:
+                user.first_name = data["given_name"]
+            if "family_name" in data:
+                user.last_name = data["family_name"]
             # Generate random password
             import string
             import random
@@ -1020,6 +1032,8 @@ class GoogleLoginView(APIView):
         response["access_token"] = str(token.access_token)
         response["refresh_token"] = str(token)
         response["user_id"] = user.id
+        response["first_name"] = user.first_name
+        response["last_name"] = user.last_name
         return Response(response)
 
 
@@ -1028,7 +1042,6 @@ class SetPasswordView(APIView):
 
     @extend_schema(
         description="Set password for user with email and activation key",
-        parameters=swagger_params1.set_password_params,  # Adding Header Parameters
         request=SetPasswordSerializer,
         responses={200: {"description": "Password set successfully"}},
     )
@@ -1073,6 +1086,98 @@ class SetPasswordView(APIView):
                         {
                             "success": True,
                             "message": "The password has been set successfully. You can now log in.",
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Profile.DoesNotExist:
+                    return Response(
+                        {
+                            "success": False,
+                            "message": "Profile for this user not found.",
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except User.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "User with this email not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserImageView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["users"],
+        parameters=swagger_params1.organization_params,
+    )
+    def put(self, request, pk):
+        profile = get_object_or_404(Profile, pk=pk)
+        print(request.data.get("profile_pic"))
+
+        if not request.data.get("profile_pic"):
+            return Response(
+                {"error": True, "errors": "Profile picture is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if request.data.get("email") != profile.user.email:
+            return Response(
+                {
+                    "error": True,
+                    "errors": "You can only update your own profile picture",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # Update the user's profile picture
+        profile.user.profile_pic = request.data.get("profile_pic")
+        profile.save()  # Save the user object to update the profile picture
+        user = User.objects.get(id=profile.user.id)
+        print(user)
+        user.profile_pic = request.data.get("profile_pic")
+        user.save()  # Save the user object to update the profile picture
+        return Response(
+            {"error": False, "message": "Profile picture updated successfully"},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResetPasswordView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        description="Reset password for user with email and activation key",
+        # parameters=swagger_params1.reset_password_params,  # Adding Header Parameters
+        request=ResetPasswordSerializer,
+        responses={200: {"description": "Password reset successfully"}},
+    )
+    def put(self, request):
+        print(request.data)
+        """Resetting a password for a user using email and activation code"""
+        serializer = ResetPasswordSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = request.data.get("email")
+
+            new_password = request.data.get("new_password")
+
+            try:
+                user = User.objects.get(email=email)
+
+                # Set a new password and reset the activation key
+                user.set_password(new_password)
+                user.save()
+
+                # Activate the user's profile
+                try:
+                    profile = Profile.objects.get(user=user)
+                    profile.is_active = True  #
+                    profile.save()
+
+                    return Response(
+                        {
+                            "success": True,
+                            "message": "The password has been reset successfully. You can now log in.",
                         },
                         status=status.HTTP_200_OK,
                     )

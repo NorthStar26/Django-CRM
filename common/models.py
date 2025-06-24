@@ -35,18 +35,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(
         default=uuid.uuid4, unique=True, editable=False, db_index=True, primary_key=True
     )
+    # add firstname and lastname
+    first_name = models.CharField(_("first name"), max_length=30, blank=True)
+    last_name = models.CharField(_("last name"), max_length=30, blank=True)
     email = models.EmailField(_("email address"), blank=True, unique=True)
-    profile_pic = models.CharField(
-        max_length=1000, null=True, blank=True
-    )
+    profile_pic = models.CharField(max_length=1000, null=True, blank=True)
     activation_key = models.CharField(max_length=150, null=True, blank=True)
     key_expires = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(_('staff status'),default=False)
+    is_staff = models.BooleanField(_("staff status"), default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
-
 
     objects = UserManager()
 
@@ -63,6 +63,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     #     """by default the expiration time is set to 2 hours"""
     #     self.key_expires = timezone.now() + datetime.timedelta(hours=2)
     #     super().save(*args, **kwargs)
+
 
 class Address(BaseModel):
     address_line = models.CharField(
@@ -116,14 +117,14 @@ class Address(BaseModel):
                 address += self.get_country_display()
         return address
 
+
 def generate_unique_key():
     return str(uuid.uuid4())
 
+
 class Org(BaseModel):
     name = models.CharField(max_length=100, blank=True, null=True)
-    api_key = models.TextField(
-        default=generate_unique_key, unique=True, editable=False
-    )
+    api_key = models.TextField(default=generate_unique_key, unique=True, editable=False)
     is_active = models.BooleanField(default=True)
     # address = models.TextField(blank=True, null=True)
     # user_limit = models.IntegerField(default=5)
@@ -185,15 +186,13 @@ class Org(BaseModel):
 #         super().save(*args, **kwargs)
 
 
-
-
 class Profile(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     org = models.ForeignKey(
         Org, null=True, on_delete=models.CASCADE, blank=True, related_name="user_org"
     )
     phone = PhoneNumberField(null=True, unique=True)
-    alternate_phone = PhoneNumberField(null=True,blank=True)
+    alternate_phone = PhoneNumberField(null=True, blank=True)
     address = models.ForeignKey(
         Address,
         related_name="adress_users",
@@ -224,11 +223,13 @@ class Profile(BaseModel):
 
     @property
     def user_details(self):
-        return  {
-            'email' : self.user.email,
-            'id' :  self.user.id,
-            'is_active' : self.user.is_active,
-            'profile_pic' : self.user.profile_pic
+        return {
+            "email": self.user.email,
+            "id": self.user.id,
+            "is_active": self.user.is_active,
+            "profile_pic": self.user.profile_pic,
+            "first_name": self.user.first_name,
+            "last_name": self.user.last_name,
         }
 
 
@@ -474,7 +475,7 @@ class Document(BaseModel):
         null=True,
         blank=True,
     )
-    
+
     status = models.CharField(
         choices=DOCUMENT_STATUS_CHOICE, max_length=64, default="active"
     )
@@ -496,7 +497,7 @@ class Document(BaseModel):
 
     def __str__(self):
         return f"{self.title}"
- 
+
     def file_type(self):
         name_ext_list = self.document_file.url.split(".")
         if len(name_ext_list) > 1:
@@ -570,7 +571,6 @@ class APISettings(BaseModel):
         null=True,
         related_name="org_api_settings",
     )
-    
 
     class Meta:
         verbose_name = "APISetting"
@@ -580,7 +580,6 @@ class APISettings(BaseModel):
 
     def __str__(self):
         return f"{self.title}"
-    
 
     def save(self, *args, **kwargs):
         if not self.apikey or self.apikey is None or self.apikey == "":
