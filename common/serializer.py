@@ -117,7 +117,15 @@ class BillingAddressSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Address
-        fields = ("address_line", "street", "city", "state", "postcode", "country", "country_display")
+        fields = (
+            "address_line",
+            "street",
+            "city",
+            "state",
+            "postcode",
+            "country",
+            "country_display",
+        )
 
     def __init__(self, *args, **kwargs):
         account_view = kwargs.pop("account", False)
@@ -442,7 +450,6 @@ class SetPasswordSerializer(serializers.Serializer):
         return attrs
 
 
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Check the existence of a user with such email
@@ -462,25 +469,74 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             if "detail" in e.detail:
                 raise serializers.ValidationError({"password": "Invalid password"})
             raise e
-        
-class ResetPasswordRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True, help_text="User's email to reset password")
 
-class ResetPasswordConfirmSerializer(serializers.Serializer):
-    """Serializer for confirming password reset"""
-    uidb64  = serializers.CharField(required=True)
-    token = serializers.CharField(required=True)
-    password = serializers.CharField(
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Resetting a password by email and activation code"""
+
+    email = serializers.EmailField(required=True, help_text="User's email")
+
+    current_password = serializers.CharField(
         required=True,
         write_only=True,
-        style={"input_type": "password"}
+        style={"input_type": "password"},
+        help_text="Current Password",
     )
+
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="New Password",
+    )
+
     confirm_password = serializers.CharField(
         required=True,
         write_only=True,
-        style={"input_type": "password"}
+        style={"input_type": "password"},
+        help_text="Confirm New Password",
     )
-    
+
+    def validate(self, attrs):
+        """Checking if passwords match and user exists"""
+        if attrs.get("new_password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords don't match"}
+            )
+
+        # Checking if a user with such email exists
+        email = attrs.get("email")
+        user = User.objects.filter(email=email).first()
+        if not user:
+            raise serializers.ValidationError(
+                {"email": "User with this email not found"}
+            )
+
+        # Checking current password
+        if not check_password(attrs.get("current_password"), user.password):
+            raise serializers.ValidationError({"current_password": "Invalid password"})
+
+        return attrs
+
+
+class ResetPasswordRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(
+        required=True, help_text="User's email to reset password"
+    )
+
+
+class ResetPasswordConfirmSerializer(serializers.Serializer):
+    """Serializer for confirming password reset"""
+
+    uidb64 = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(
+        required=True, write_only=True, style={"input_type": "password"}
+    )
+    confirm_password = serializers.CharField(
+        required=True, write_only=True, style={"input_type": "password"}
+    )
+
     def validate_password(self, value):
         """Checking password strength"""
         try:
@@ -488,7 +544,7 @@ class ResetPasswordConfirmSerializer(serializers.Serializer):
         except ValidationError as e:
             raise serializers.ValidationError(list(e))
         return value
-        
+
     def validate(self, attrs):
         """Checking if passwords match"""
         if attrs.get("password") != attrs.get("confirm_password"):
