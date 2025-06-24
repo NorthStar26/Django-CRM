@@ -516,6 +516,8 @@ class ResetPasswordSerializer(serializers.Serializer):
         if not check_password(attrs.get("current_password"), user.password):
             raise serializers.ValidationError({"current_password": "Invalid password"})
 
+        return attrs
+
 
 class ResetPasswordRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(
