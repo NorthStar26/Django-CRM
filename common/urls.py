@@ -1,6 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt import views as jwt_views
-from common.views import CustomTokenObtainPairView 
+from common.views import CustomTokenObtainPairView, ResetPasswordRequestView, ResetPasswordConfirmView
 from common import views
 
 app_name = "api_common"
@@ -17,10 +17,11 @@ urlpatterns = [
     #path("auth/login/", jwt_views.TokenObtainPairView.as_view(), name="token_obtain_pair"),  # autenticate with username and password
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/logout/", jwt_views.TokenBlacklistView.as_view(), name="token_blacklist"),
-  
-
     path("auth/google/", views.GoogleLoginView.as_view()),
     path("auth/set-password/", views.SetPasswordView.as_view(), name="set_password"),
+    path("auth/password-reset/", ResetPasswordRequestView.as_view(), name="password_reset"),
+    path("auth/password-reset-confirm/", ResetPasswordConfirmView.as_view(), name="password_reset_confirm"),
+
     path("org/", views.OrgProfileCreateView.as_view()),
     path("profile/", views.ProfileView.as_view()),
     path("users/get-teams-and-users/", views.GetTeamsAndUsersView.as_view()),

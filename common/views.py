@@ -1090,3 +1090,102 @@ class SetPasswordView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ResetPasswordRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="5/m", block=True))
+    @extend_schema(
+        description="Request password reset link",
+        request=ResetPasswordRequestSerializer,
+        responses={200: {"description": "Password reset link sent"}}
+    )
+    def post(self, request):
+        """Send password reset link to user's email"""
+        try:
+            serializer = ResetPasswordRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                {"success": False, "message": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+            email = serializer.validated_data["email"]
+
+            # Check if user exists
+            user = User.objects.filter(email=email).first()
+            if not user:
+                # For security reasons, don't reveal that email doesn't exist
+                return Response(
+                    {"success": True, "message": "If your email exists in our system, you will receive a password reset link"},
+                    status=status.HTTP_200_OK
+                )
+
+            # Send password reset email asynchronously
+            send_email_to_reset_password.delay(email)
+
+            return Response(
+                {"success": True, "message": "Password reset link has been sent to your email"},
+                status=status.HTTP_200_OK
+            )
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps({"detail": "Too many requests. Please try again later."}),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+class ResetPasswordConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="3/m", block=True))
+    @extend_schema(
+        description="Confirm password reset with token",
+        request=ResetPasswordConfirmSerializer,
+        responses={200: {"description": "Password reset successful"}}
+    )
+    def post(self, request):
+        """Reset password using uid and token from email"""
+        try:
+            serializer = ResetPasswordConfirmSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"success": False, "message": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            uidb64  = serializer.validated_data["uidb64"]
+            token = serializer.validated_data["token"]
+            password = serializer.validated_data["password"]
+
+            try:
+                # Decode the user ID
+                user_id = force_str(urlsafe_base64_decode(uidb64))
+                user = User.objects.get(pk=user_id)
+
+                # Check the token
+                if not default_token_generator.check_token(user, token):
+                    return Response(
+                        {"success": False, "message": "The reset link is invalid or has expired"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Set the new password
+                user.set_password(password)
+                user.save()
+
+                return Response(
+                    {"success": True, "message": "Password has been reset successfully. You can now log in with your new password."},
+                    status=status.HTTP_200_OK
+                )
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                return Response(
+                    {"success": False, "message": "The reset link is invalid or has expired"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps({"detail": "Too many attempts. Please try again later."}),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )

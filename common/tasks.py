@@ -262,15 +262,17 @@ def send_email_to_reset_password(user_email):
     user = User.objects.filter(email=user_email).first()
     context = {}
     context["user_email"] = user_email
+    context["frontend_url"] = settings.FRONTEND_DOMAIN_NAME
     context["url"] = settings.DOMAIN_NAME
     context["uid"] = (urlsafe_base64_encode(force_bytes(user.pk)),)
     context["token"] = default_token_generator.make_token(user)
     context["token"] = context["token"]
-    context["complete_url"] = context[
-        "url"
-    ] + "/auth/reset-password/{uidb64}/{token}/".format(
+    context["password_reset_url"] = context[
+            "frontend_url"
+    ] + "/auth/reset-password/{uidb64}/{token}".format(
         uidb64=context["uid"][0], token=context["token"]
     )
+    print(f"DEBUG - UID: {context['uid'][0]}, Token: {context['token']}")
     subject = "Set a New Password"
     recipients = []
     recipients.append(user_email)
@@ -283,3 +285,7 @@ def send_email_to_reset_password(user_email):
         )
         msg.content_subtype = "html"
         msg.send()
+
+
+
+
