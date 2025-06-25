@@ -455,7 +455,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Check the existence of a user with such email
         email = attrs.get("email")
         try:
-            User.objects.get(email=email)
+            user = User.objects.get(email=email)
         except User.DoesNotExist:
             raise serializers.ValidationError(
                 {"email": "User with this email not found"}
@@ -463,12 +463,29 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # If the user exists, call the standard validation
         try:
-            return super().validate(attrs)
+            data = super().validate(attrs)
         except serializers.ValidationError as e:
             # If the password is incorrect, return a specific error
             if "detail" in e.detail:
                 raise serializers.ValidationError({"password": "Invalid password"})
             raise e
+
+        # Standardize response to match Google login format
+        user = self.user
+        standardized_data = {
+            "username": user.email,
+            "access_token": data["access"],  # New field name (matches Google login)
+            "refresh_token": data["refresh"],  # New field name (matches Google login)
+            "user_id": user.id,  # Keep as UUID (same as Google login)
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+        }
+
+        # Add profile_pic if it exists (to match Google login)
+        if hasattr(user, "profile_pic") and user.profile_pic:
+            standardized_data["profile_pic"] = user.profile_pic
+
+        return standardized_data
 
 
 class ResetPasswordSerializer(serializers.Serializer):
