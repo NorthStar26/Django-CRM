@@ -223,6 +223,40 @@ class ProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class CurrentUserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for current user's profile with organization-specific data"""
+
+    # User details
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+
+    # Address details (if exists)
+    address = BillingAddressSerializer(read_only=True)
+
+    # Organization details
+    organization = OrganizationSerializer(source="org", read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "alternate_phone",
+            "address",
+            "role",
+            "has_sales_access",
+            "has_marketing_access",
+            "is_organization_admin",
+            "date_of_joining",
+            "is_active",
+            "organization",
+        )
+
+
 class AttachmentsSerializer(serializers.ModelSerializer):
     file_path = serializers.SerializerMethodField()
 
@@ -292,7 +326,7 @@ def find_urls(string):
     # http(s)://google.com
     website_regex = "^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$"
     # http(s)://google.com:8000
-    website_regex_port = "^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,63}:[0-9]{2,4}$"
+    website_regex_port = "^https?://[A-ZaZ0-9.-]+\.[A-Za-z]{2,63}:[0-9]{2,4}$"
     url = re.findall(website_regex, string)
     url_port = re.findall(website_regex_port, string)
     if url and url[0] != "":

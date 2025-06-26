@@ -542,6 +542,57 @@ class ProfileView(APIView):
         return Response(context, status=status.HTTP_200_OK)
 
 
+class CurrentUserProfileView(APIView):
+    """
+    API endpoint to retrieve current user's profile for a specified organization.
+
+    The organization is specified via the 'org' header. The authenticated user
+    must have a profile in that organization.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["profile"],
+        parameters=swagger_params1.organization_params,
+        description="Get current user's profile for the specified organization",
+        responses={
+            200: CurrentUserProfileSerializer,
+            403: {"description": "User not authorized for this organization"},
+            404: {"description": "User profile not found in this organization"},
+        },
+    )
+    def get(self, request, format=None):
+        org_id = request.headers.get("org")
+
+        if not org_id:
+            return Response(
+                {"error": True, "message": "Organization header is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Get the user's profile for the specified organization
+            profile = Profile.objects.get(
+                user=request.user, org_id=org_id, is_active=True
+            )
+        except Profile.DoesNotExist:
+            return Response(
+                {
+                    "error": True,
+                    "message": "User is not assigned to this organization or profile is inactive",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Serialize the profile data
+        serializer = CurrentUserProfileSerializer(profile)
+
+        return Response(
+            {"error": False, "profile": serializer.data}, status=status.HTTP_200_OK
+        )
+
+
 class DocumentListView(APIView, LimitOffsetPagination):
     # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
