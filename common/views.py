@@ -269,7 +269,7 @@ class UserDetailView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
-        profile = get_object_or_404(Profile, user__id=pk)
+        profile = get_object_or_404(Profile, user__id=pk, org=self.request.profile.org)
         return profile
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
@@ -1164,7 +1164,7 @@ class UserImageView(APIView):
         parameters=swagger_params1.organization_params,
     )
     def put(self, request, pk):
-        profile = get_object_or_404(Profile, user__id=pk)
+        profile = get_object_or_404(Profile, user__id=pk, org=request.profile.org)
         print(request.data.get("profile_pic"))
 
         if not request.data.get("profile_pic"):
