@@ -269,7 +269,7 @@ class UserDetailView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
-        profile = get_object_or_404(Profile, pk=pk)
+        profile = get_object_or_404(Profile, user__id=pk, org=self.request.profile.org)
         return profile
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
@@ -540,6 +540,57 @@ class ProfileView(APIView):
         context = {}
         context["user_obj"] = ProfileSerializer(self.request.profile).data
         return Response(context, status=status.HTTP_200_OK)
+
+
+class CurrentUserProfileView(APIView):
+    """
+    API endpoint to retrieve current user's profile for a specified organization.
+
+    The organization is specified via the 'org' header. The authenticated user
+    must have a profile in that organization.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["profile"],
+        parameters=swagger_params1.organization_params,
+        description="Get current user's profile for the specified organization",
+        responses={
+            200: CurrentUserProfileSerializer,
+            403: {"description": "User not authorized for this organization"},
+            404: {"description": "User profile not found in this organization"},
+        },
+    )
+    def get(self, request, format=None):
+        org_id = request.headers.get("org")
+
+        if not org_id:
+            return Response(
+                {"error": True, "message": "Organization header is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Get the user's profile for the specified organization
+            profile = Profile.objects.get(
+                user=request.user, org_id=org_id, is_active=True
+            )
+        except Profile.DoesNotExist:
+            return Response(
+                {
+                    "error": True,
+                    "message": "User is not assigned to this organization or profile is inactive",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Serialize the profile data
+        serializer = CurrentUserProfileSerializer(profile)
+
+        return Response(
+            {"error": False, "profile": serializer.data}, status=status.HTTP_200_OK
+        )
 
 
 class DocumentListView(APIView, LimitOffsetPagination):
@@ -842,7 +893,7 @@ class UserStatusView(APIView):
             )
         params = request.data
         profiles = Profile.objects.filter(org=request.profile.org)
-        profile = profiles.get(id=pk)
+        profile = profiles.get(user__id=pk)
 
         if params.get("status"):
             user_status = params.get("status")
@@ -1113,7 +1164,7 @@ class UserImageView(APIView):
         parameters=swagger_params1.organization_params,
     )
     def put(self, request, pk):
-        profile = get_object_or_404(Profile, pk=pk)
+        profile = get_object_or_404(Profile, user__id=pk, org=request.profile.org)
         print(request.data.get("profile_pic"))
 
         if not request.data.get("profile_pic"):
