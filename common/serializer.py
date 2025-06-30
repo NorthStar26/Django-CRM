@@ -223,6 +223,40 @@ class ProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class CurrentUserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for current user's profile with organization-specific data"""
+
+    # User details
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+
+    # Address details (if exists)
+    address = BillingAddressSerializer(read_only=True)
+
+    # Organization details
+    organization = OrganizationSerializer(source="org", read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = (
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "alternate_phone",
+            "address",
+            "role",
+            "has_sales_access",
+            "has_marketing_access",
+            "is_organization_admin",
+            "date_of_joining",
+            "is_active",
+            "organization",
+        )
+
+
 class AttachmentsSerializer(serializers.ModelSerializer):
     file_path = serializers.SerializerMethodField()
 
@@ -287,8 +321,6 @@ class DocumentCreateSerializer(serializers.ModelSerializer):
 
 
 def find_urls(string):
-    # website_regex = "^((http|https)://)?([A-Za-z0-9.-]+\.[A-Za-z]{2,63})?$"  # (http(s)://)google.com or google.com
-    # website_regex = "^https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,63})?$"  # (http(s)://)google.com
     # http(s)://google.com
     website_regex = "^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$"
     # http(s)://google.com:8000
@@ -455,7 +487,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Check the existence of a user with such email
         email = attrs.get("email")
         try:
-            User.objects.get(email=email)
+            user = User.objects.get(email=email)
         except User.DoesNotExist:
             raise serializers.ValidationError(
                 {"email": "User with this email not found"}
@@ -463,12 +495,29 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # If the user exists, call the standard validation
         try:
-            return super().validate(attrs)
+            data = super().validate(attrs)
         except serializers.ValidationError as e:
             # If the password is incorrect, return a specific error
             if "detail" in e.detail:
                 raise serializers.ValidationError({"password": "Invalid password"})
             raise e
+
+        # Standardize response to match Google login format
+        user = self.user
+        standardized_data = {
+            "username": user.email,
+            "access_token": data["access"],  # New field name (matches Google login)
+            "refresh_token": data["refresh"],  # New field name (matches Google login)
+            "user_id": user.id,  # Keep as UUID (same as Google login)
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+        }
+
+        # Add profile_pic if it exists (to match Google login)
+        if hasattr(user, "profile_pic") and user.profile_pic:
+            standardized_data["profile_pic"] = user.profile_pic
+
+        return standardized_data
 
 
 class ResetPasswordSerializer(serializers.Serializer):
