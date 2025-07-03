@@ -26,11 +26,12 @@ class CompanyProfile(BaseModel):
         ]
     )
 
-    website = models.URLField(
+    website = models.CharField(
         _("Website"),
         max_length=255,
-        blank=True,
-        null=True,
+        blank=False,
+        null=False,
+        help_text=_("Website URL of the company"),
         validators=[
             URLValidator(
                 schemes=['http', 'https'],
@@ -42,8 +43,8 @@ class CompanyProfile(BaseModel):
     email = models.EmailField(
         _("Email"),
         max_length=255,
-        blank=True,
-        null=True,
+        blank=False,
+        null=False,
         db_index=True,  # Indexing for faster lookups
         validators=[
             EmailValidator(
@@ -56,8 +57,8 @@ class CompanyProfile(BaseModel):
 
     phone = PhoneNumberField(
         _("Phone Number"),
-        blank=True,
-        null=True,
+        blank=False,
+        null=False,
         help_text="International format: +31234567890"
     )
 
@@ -150,20 +151,21 @@ class CompanyProfile(BaseModel):
         ordering = ("-created_at",)
         unique_together = [('name', 'org'), # Uniqueness of the name within the organization
                            ('email', 'org'), # Uniqueness of email within the organization
+                           ('website', 'org')  # Uniqueness of website within the organization
                            ]
         indexes = [
             models.Index(fields=['name', 'org']),
             models.Index(fields=['email', 'org']),
+            models.Index(fields=['website', 'org']),
             models.Index(fields=['industry']),
             models.Index(fields=['created_at']),
         ]
 
 
     def clean(self):
-        """Комплексная валидация модели"""
+
         errors = {}
 
-        # Валидация имени
         if self.name:
             self.name = self.name.strip()
             if len(self.name) < 2:
@@ -178,12 +180,12 @@ class CompanyProfile(BaseModel):
 
         if self.email:
             self.email = self.email.strip().lower()
-            # Проверка на корпоративные домены
+            # Check for corporate domains
             forbidden_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com']
             if any(domain in self.email for domain in forbidden_domains):
                 errors['email'] = _("Please use a business email address")
 
-        # Валидация полноты адреса
+        # Validate address completeness
         billing_fields = [self.billing_street, self.billing_city, self.billing_country]
         billing_provided = [field for field in billing_fields if field]
 

@@ -137,6 +137,8 @@ class CompanyListView(APIView):
                 error_message = "Company with this name already exists in your organization"
             elif "email" in str(e).lower():
                 error_message = "Company with this email already exists in your organization"
+            elif "website" in str(e).lower():
+                error_message = "Company with this website already exists in your organization"
 
             return Response(
                 {"error": True, "message": error_message},
@@ -173,7 +175,7 @@ class CompanyListView(APIView):
             404: {"description": "Company not found"}
         }
     ),
-    put=extend_schema(
+    patch=extend_schema(
         tags=["Companies"],
         parameters=company_auth_headers,
         request=CompanySwaggerCreateSerializer,
@@ -224,10 +226,9 @@ class CompanyDetailView(APIView):
         parameters=company_auth_headers,
         request=CompanySwaggerCreateSerializer
     )
-    def put(self, request, pk, format=None):
-        """Update company"""
+    def patch(self, request, pk, format=None):
+        """Partial update company"""
         company = self.get_object(pk)
-
 
         if company.org != request.profile.org:
             return Response(
@@ -238,13 +239,13 @@ class CompanyDetailView(APIView):
         serializer = CompanyCreateUpdateSerializer(
             company,
             data=request.data,
-            context={'request': request})
+            partial=True,
+            context={'request': request}
+        )
         if serializer.is_valid():
-
             updated_company = serializer.save()
             return Response(
-                {"error": False, "data": CompanyDetailSerializer(
-                    updated_company).data, 'message': 'Updated Successfully'},
+                {"error": False, "data": CompanyDetailSerializer(updated_company).data, 'message': 'Updated Successfully'},
                 status=status.HTTP_200_OK,
             )
         return Response(
