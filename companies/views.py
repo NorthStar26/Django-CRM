@@ -51,7 +51,26 @@ class CompanyListView(APIView):
         try:
             print(f"Getting companies for user: {request.user}")
             print(f"Request profile: {getattr(request, 'profile', 'Not found')}")
+
+
             companies = CompanyProfile.objects.filter(org=request.profile.org)
+            name_search = request.query_params.get('name', None)
+            if name_search:
+                companies = companies.filter(name__icontains=name_search)
+                print(f"Searching by name: {name_search}")
+
+            country_filter = request.query_params.get('billing_country', None)
+            if country_filter:
+                companies = companies.filter(billing_country=country_filter)
+                print(f"Filtering by country: {country_filter}")
+
+            industry_filter = request.query_params.get('industry', None)
+            if industry_filter:
+                companies = companies.filter(industry=industry_filter)
+                print(f"Filtering by industry: {industry_filter}")
+
+            companies = companies.order_by('-created_at')
+
             serializer = CompanyListSerializer(companies, many=True)
             return Response(
                 {"error": False, "data": serializer.data},
@@ -62,9 +81,9 @@ class CompanyListView(APIView):
             print(f"Error getting companies: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
-                {"error": True, "message": f"Error getting companies: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+                    {"error": True, "message": f"Error getting companies: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
     @extend_schema(
         tags=["Companies"],
