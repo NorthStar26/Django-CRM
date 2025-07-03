@@ -1,21 +1,36 @@
-from drf_spectacular.utils import OpenApiParameter
+from drf_spectacular.utils import OpenApiParameter, OpenApiExample
 from drf_spectacular.openapi import OpenApiTypes
+from enum import Enum
+from common.utils import COUNTRIES, INDCHOICES
 
 
 company_list_get_params = [
+
     OpenApiParameter(
         name="name",
-        description="Filter by company name",
+        description="Search companies by name (partial match, case insensitive)",
         required=False,
         type=OpenApiTypes.STR,
         location=OpenApiParameter.QUERY,
     ),
+
     OpenApiParameter(
-        name="email",
-        description="Filter by company email",
+        name="billing_country",
+        description="Filter by country",
         required=False,
         type=OpenApiTypes.STR,
         location=OpenApiParameter.QUERY,
+        enum=[choice[0] for choice in COUNTRIES],
+    ),
+
+
+    OpenApiParameter(
+        name="industry",
+        description="Filter by industry",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+        enum=[choice[0] for choice in INDCHOICES],
     ),
 ]
 
