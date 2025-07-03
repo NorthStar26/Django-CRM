@@ -1,10 +1,10 @@
 from rest_framework import serializers
 from common.serializer import UserSerializer, OrganizationSerializer
 from .models import CompanyProfile
+from django.utils.translation import gettext_lazy as _
 
 
 class CompanySwaggerCreateSerializer(serializers.ModelSerializer):
-    """Swagger serializer for company creation"""
     class Meta:
         model = CompanyProfile
         fields = [
@@ -15,7 +15,6 @@ class CompanySwaggerCreateSerializer(serializers.ModelSerializer):
 
 
 class CompanySwaggerListSerializer(serializers.ModelSerializer):
-    """Swagger serializer for list of companies"""
     class Meta:
         model = CompanyProfile
         fields = [
@@ -25,7 +24,6 @@ class CompanySwaggerListSerializer(serializers.ModelSerializer):
 
 
 class CompanyListSerializer(serializers.ModelSerializer):
-    """Serializer for list of companies"""
     created_by = UserSerializer(read_only=True)
     organization = OrganizationSerializer(source='org', read_only=True)
 
@@ -40,7 +38,7 @@ class CompanyListSerializer(serializers.ModelSerializer):
 
 
 class CompanyDetailSerializer(serializers.ModelSerializer):
-    """Serializer for detailed company information"""
+    """Serializer for detailed information about the company"""
     created_by = UserSerializer(read_only=True)
     updated_by = UserSerializer(read_only=True)
     organization = OrganizationSerializer(source='org', read_only=True)
@@ -57,8 +55,6 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
 
 
 class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for creating and updating a company"""
-
     class Meta:
         model = CompanyProfile
         fields = [
@@ -66,3 +62,43 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
             'billing_street', 'billing_address_number', 'billing_city',
             'billing_postcode', 'billing_country'
         ]
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+
+        if request and hasattr(request, 'profile'):
+            org = request.profile.org
+
+            # Duplicate Name Check (Excluding Current Company)
+            if 'name' in validated_data:
+                if CompanyProfile.objects.filter(
+                    name__iexact=validated_data['name'],
+                    org=org
+                ).exclude(id=instance.id).exists():
+                    raise serializers.ValidationError({
+                        'name': [_("Another company with this name already exists in your organization")]
+                    })
+
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        """Create with org"""
+        request = self.context.get('request')
+
+        # Set org from request
+        if request and hasattr(request, 'profile') and request.profile.org:
+            validated_data['org'] = request.profile.org
+
+        # Check for duplicates
+        if 'org' in validated_data:
+            org = validated_data['org']
+
+            # Check duplicate by name
+            if CompanyProfile.objects.filter(
+                name__iexact=validated_data['name'],
+                org=org
+            ).exists():
+                raise serializers.ValidationError({
+                    'name': [_("Company with this name already exists in your organization")]
+                })
+
+        return super().create(validated_data)
