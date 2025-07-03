@@ -68,7 +68,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_ses",
     "drf_spectacular",
-    #"drf_yasg", 
+    #"drf_yasg",
     "common",
     "accounts",
     "cases",
@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "invoices",
     "events",
     "teams",
+    "companies",
 ]
 
 MIDDLEWARE = [
@@ -361,7 +362,7 @@ SIMPLE_JWT = {
 JWT_ALGO = "HS256"
 
 # Setting the lifetime of the password reset token (1 day)
-PASSWORD_RESET_TIMEOUT =43200  # seconds 
+PASSWORD_RESET_TIMEOUT =43200  # seconds
 
 # settings django_ratelimit
 RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
