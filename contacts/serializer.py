@@ -30,6 +30,8 @@ class ContactSerializer(serializers.ModelSerializer):
     def get_country(self, obj):
         return obj.get_country_display()
 
+
+
     class Meta:
         model = Contact
         fields = (
@@ -68,7 +70,34 @@ class ContactSerializer(serializers.ModelSerializer):
             "company",
         )
 
+class ContactBasicSerializer(serializers.ModelSerializer):
 
+    company = CompanyListSerializer(read_only=True)
+    salutation_display = serializers.SerializerMethodField()
+    language_display = serializers.SerializerMethodField()
+
+    def get_salutation_display(self, obj):
+        return obj.get_salutation_display() if obj.salutation else None
+
+    def get_language_display(self, obj):
+        return obj.get_language_display() if obj.language else None
+    class Meta:
+        model = Contact
+        fields = (
+            "id",
+            "salutation",
+            "salutation_display",  #  (Mr, Ms, etc.)
+            "first_name",
+            "last_name",
+            "title",
+            "primary_email",
+            "mobile_number",
+            "language",
+            "language_display",    # (English, Spanish, etc.)
+            "do_not_call",
+            "description",
+            "company",
+        )
 class CreateContactSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
@@ -79,15 +108,12 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 org=self.org
             )
     def create(self, validated_data):
-        # ✅ Добавить как в companies
         request = self.context.get('request')
         if not request:
-            # Если нет request в context, берем из request_obj
             request = getattr(self, 'request_obj', None)
 
         if request and hasattr(request, 'profile') and request.profile:
             validated_data['org'] = request.profile.org
-            # ✅ BaseModel автоматически установит created_by
 
         return super().create(validated_data)
 
@@ -134,7 +160,6 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 )
         return primary_email
     def validate_company(self, company):
-        """Дополнительная валидация company_id"""
         if company:
             org = getattr(self, 'org', None)
             if org and company.org != org:
