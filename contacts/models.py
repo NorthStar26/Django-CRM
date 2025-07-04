@@ -7,11 +7,30 @@ from common.models import Address, Org, Profile
 from common.base import BaseModel
 from common.utils import COUNTRIES
 from teams.models import Teams
+from companies.models import CompanyProfile
 
+SALUTATION_CHOICES = [
+    ('Mr', 'Mr'),
+    ('Ms', 'Ms'),
+]
+LANGUAGE_CHOICES = [
+    ('en', 'English'),
+    ('es', 'Spanish'),
+    ('fr', 'French'),
+    ('de', 'German'),
+    ('it', 'Italian'),
+    ('pt', 'Portuguese'),
+    ('ukr', 'Ukrainian'),
+    ('zh', 'Chinese'),
+    ('ja', 'Japanese'),
+    ('ko', 'Korean'),
+    ('ar', 'Arabic'),
+    ('hi', 'Hindi'),
+]
 
 class Contact(BaseModel):
     salutation = models.CharField(
-        _("Salutation"), max_length=255, default="", blank=True
+        _("Salutation"), max_length=255, choices=SALUTATION_CHOICES, blank=True,null=True
     )
     first_name = models.CharField(_("First name"), max_length=255)
     last_name = models.CharField(_("Last name"), max_length=255)
@@ -23,7 +42,7 @@ class Contact(BaseModel):
     mobile_number = PhoneNumberField(null=True, unique=True)
     secondary_number = PhoneNumberField(null=True,blank=True)
     department = models.CharField(_("Department"), max_length=255, null=True)
-    language = models.CharField(_("Language"), max_length=255, null=True)
+    language = models.CharField(_("Language"), max_length=255, choices=LANGUAGE_CHOICES, null=True,blank=True)
     do_not_call = models.BooleanField(default=False)
     address = models.ForeignKey(
         Address,
@@ -45,6 +64,15 @@ class Contact(BaseModel):
     org = models.ForeignKey(Org, on_delete=models.SET_NULL, null=True, blank=True)
     country = models.CharField(max_length=3, choices=COUNTRIES, blank=True, null=True)
 
+    company= models.ForeignKey(
+        CompanyProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contacts",
+        verbose_name=_("Company"),
+        help_text=_("Company associated with this contact")
+    )
     class Meta:
         verbose_name = "Contact"
         verbose_name_plural = "Contacts"
@@ -52,12 +80,11 @@ class Contact(BaseModel):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return self.first_name
-
+        return f"{self.first_name} {self.last_name}"
     @property
     def created_on_arrow(self):
         return arrow.get(self.created_at).humanize()
-    
+
     @property
     def created_on(self):
         return self.created_at
