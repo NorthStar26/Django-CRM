@@ -302,37 +302,54 @@ class ContactDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
-
-
-        @extend_schema(
-            tags=["contacts"], parameters=swagger_params1.organization_params
-        )
-        def delete(self, request, pk, format=None):
-            self.object = self.get_object(pk)
-            if self.object.org != request.profile.org:
-                return Response(
-                    {"error": True, "errors": "User company doesnot match with header...."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            if (
-                self.request.profile.role != "ADMIN"
-                and not self.request.profile.is_admin
-                and self.request.profile != self.object.created_by
-            ):
-                return Response(
-                    {
-                        "error": True,
-                        "errors": "You don't have permission to perform this action.",
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            if self.object.address_id:
-                self.object.address.delete()
-            self.object.delete()
+    @extend_schema(
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params
+    )
+    def delete(self, request, pk, format=None):  # NEW version
+        """Delete a specific contact by ID"""
+        if not hasattr(request, 'profile') or not request.profile:
             return Response(
-                {"error": False, "message": "Contact Deleted Successfully."},
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            contact_obj = self.get_object(pk)
+            if contact_obj.org != request.profile.org:
+                return Response(
+                    {"error": True, "errors": "Contact not found in your organization"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if request.profile.role != "ADMIN" and not request.profile.is_admin:
+                if request.profile != contact_obj.created_by:
+                    return Response(
+                        {
+                            "error": True,
+                            "errors": "You do not have Permission to delete this contact",
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            contact_obj.delete()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Contact deleted successfully",
+                },
                 status=status.HTTP_200_OK,
+            )
+
+        except Contact.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Contact not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "errors": f"Failed to delete contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @extend_schema(
