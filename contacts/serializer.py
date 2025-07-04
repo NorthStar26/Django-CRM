@@ -30,6 +30,8 @@ class ContactSerializer(serializers.ModelSerializer):
     def get_country(self, obj):
         return obj.get_country_display()
 
+
+
     class Meta:
         model = Contact
         fields = (
@@ -68,7 +70,35 @@ class ContactSerializer(serializers.ModelSerializer):
             "company",
         )
 
+class ContactBasicSerializer(serializers.ModelSerializer):
+    """Serializer для основной информации о контакте"""
 
+    company = CompanyListSerializer(read_only=True)
+    salutation_display = serializers.SerializerMethodField()
+    language_display = serializers.SerializerMethodField()
+
+    def get_salutation_display(self, obj):
+        return obj.get_salutation_display() if obj.salutation else None
+
+    def get_language_display(self, obj):
+        return obj.get_language_display() if obj.language else None
+    class Meta:
+        model = Contact
+        fields = (
+            "id",
+            "salutation",
+            "salutation_display",  # Отображаемое значение (Mr, Ms, etc.)
+            "first_name",
+            "last_name",
+            "title",
+            "primary_email",
+            "mobile_number",
+            "language",
+            "language_display",    # Отображаемое значение (English, Spanish, etc.)
+            "do_not_call",
+            "description",
+            "company",
+        )
 class CreateContactSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
