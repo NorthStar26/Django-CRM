@@ -16,15 +16,14 @@ from common.serializer import (
     CommentSerializer,
 )
 from common.utils import COUNTRIES
-
+from contacts.models import Contact, SALUTATION_CHOICES, LANGUAGE_CHOICES
 #from common.external_auth import CustomDualAuthentication
 from contacts import swagger_params1
-from contacts.models import Contact, Profile
 from contacts.serializer import *
 from contacts.tasks import send_email_to_assigned_user
 from tasks.serializer import TaskSerializer
 from teams.models import Teams
-
+from companies.models import CompanyProfile
 
 class ContactsListView(APIView, LimitOffsetPagination):
     #authentication_classes = (CustomDualAuthentication,)
@@ -37,7 +36,7 @@ class ContactsListView(APIView, LimitOffsetPagination):
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
-                | Q(created_by=self.request.profile.user)
+                | Q(created_by=self.request.profile)
             ).distinct()
 
         if params:
@@ -86,58 +85,74 @@ class ContactsListView(APIView, LimitOffsetPagination):
         return Response(context)
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params,request=CreateContactSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=CreateContactSerializer
     )
-    def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs): # new version
         params = request.data
-        contact_serializer = CreateContactSerializer(data=params, request_obj=request)
-        address_serializer = BillingAddressSerializer(data=params)
 
-        data = {}
-        if not contact_serializer.is_valid():
-            data["contact_errors"] = contact_serializer.errors
-        if not address_serializer.is_valid():
-            data["address_errors"] = (address_serializer.errors,)
-        if data:
+        if not hasattr(request, 'profile') or not request.profile:
             return Response(
-                {"error": True, "errors": data},
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if request.profile.role != "ADMIN" and not request.profile.is_admin:
+            if not request.profile.is_active:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have Permission to perform this action",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        if not request.profile.org:
+            return Response(
+                {"error": True, "errors": "Organization not found"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # if contact_serializer.is_valid() and address_serializer.is_valid():
-        address_obj = address_serializer.save()
-        contact_obj = contact_serializer.save(date_of_birth=params.get("date_of_birth"))
-        contact_obj.address = address_obj
-        contact_obj.org = request.profile.org
-        contact_obj.save()
+        #  CreateContactSerializer expects a request_obj
+        contact_serializer = CreateContactSerializer(
+            data=params,
+            request_obj=request,
+            context={'request': request}  # Add context to the serializer
+            )
 
-        if params.get("teams"):
-            teams_list = params.get("teams")
-            teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-            contact_obj.teams.add(*teams)
+        if not contact_serializer.is_valid():
+            return Response(
+                {"error": True, "errors": contact_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if params.get("assigned_to"):
-            assinged_to_list = params.get("assigned_to")
-            profiles = Profile.objects.filter(id__in=assinged_to_list, org=request.profile.org)
-            contact_obj.assigned_to.add(*profiles)
+        try:
+            contact_obj = contact_serializer.save()
+            contact_obj.org = request.profile.org
+            contact_obj.is_active = True
+            contact_obj.save()
 
-        recipients = list(contact_obj.assigned_to.all().values_list("id", flat=True))
-        send_email_to_assigned_user.delay(
-            recipients,
-            contact_obj.id,
+            print(f"Contact created successfully: {contact_obj.id}")
+            print(f"Created by: {request.profile.user.email}")
+            print(f"Organization: {request.profile.org}")
+            print(f"Is active: {contact_obj.is_active}")
+
+            return Response(
+            {
+                "error": False,
+                "message": "Contact created successfully",
+                "contact_id": str(contact_obj.id),
+            },
+            status=status.HTTP_201_CREATED,
         )
 
-        if request.FILES.get("contact_attachment"):
-            attachment = Attachments()
-            attachment.created_by = request.profile.user
-            attachment.file_name = request.FILES.get("contact_attachment").name
-            attachment.contact = contact_obj
-            attachment.attachment = request.FILES.get("contact_attachment")
-            attachment.save()
-        return Response(
-            {"error": False, "message": "Contact created Successfuly"},
-            status=status.HTTP_200_OK,
-        )
 
+        except Exception as e:
+            import traceback
+            print(f"Error creating contact: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": True, "errors": f"Failed to create contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class ContactDetailView(APIView):
     # #authentication_classes = (CustomDualAuthentication,)
@@ -148,7 +163,9 @@ class ContactDetailView(APIView):
         return get_object_or_404(Contact, pk=pk)
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.contact_create_post_params,request=CreateContactSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=CreateContactSerializer
     )
     def put(self, request, pk, format=None):
         data = request.data
@@ -227,7 +244,7 @@ class ContactDetailView(APIView):
             )
             if request.FILES.get("contact_attachment"):
                 attachment = Attachments()
-                attachment.created_by = request.profile.user
+                attachment.created_by = request.profile
                 attachment.file_name = request.FILES.get("contact_attachment").name
                 attachment.contact = contact_obj
                 attachment.attachment = request.FILES.get("contact_attachment")
@@ -366,7 +383,7 @@ class ContactDetailView(APIView):
 
         if self.request.FILES.get("contact_attachment"):
             attachment = Attachments()
-            attachment.created_by = self.request.profile.user
+            attachment.created_by = request.profile
             attachment.file_name = self.request.FILES.get("contact_attachment").name
             attachment.contact = self.contact_obj
             attachment.attachment = self.request.FILES.get("contact_attachment")

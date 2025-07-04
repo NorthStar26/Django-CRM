@@ -6,6 +6,8 @@ from common.serializer import (
     OrganizationSerializer,
     ProfileSerializer,
 )
+from companies.models import CompanyProfile
+from companies.serializer import CompanyListSerializer
 from contacts.models import Contact
 from teams.serializer import TeamsSerializer
 
@@ -21,6 +23,9 @@ class ContactSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField()
     org = OrganizationSerializer()
     country = serializers.SerializerMethodField()
+    company = CompanyListSerializer(read_only=True)
+    created_by = ProfileSerializer(read_only=True)
+
 
     def get_country(self, obj):
         return obj.get_country_display()
@@ -52,6 +57,7 @@ class ContactSerializer(serializers.ModelSerializer):
             "assigned_to",
             "created_by",
             "created_at",
+            "updated_at",
             "is_active",
             "teams",
             "created_on_arrow",
@@ -59,6 +65,7 @@ class ContactSerializer(serializers.ModelSerializer):
             "get_team_and_assigned_users",
             "get_assigned_users_not_in_teams",
             "org",
+            "company",
         )
 
 
@@ -68,6 +75,21 @@ class CreateContactSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         if request_obj:
             self.org = request_obj.profile.org
+            self.fields['company'].queryset = CompanyProfile.objects.filter(
+                org=self.org
+            )
+    def create(self, validated_data):
+        # ✅ Добавить как в companies
+        request = self.context.get('request')
+        if not request:
+            # Если нет request в context, берем из request_obj
+            request = getattr(self, 'request_obj', None)
+
+        if request and hasattr(request, 'profile') and request.profile:
+            validated_data['org'] = request.profile.org
+            # ✅ BaseModel автоматически установит created_by
+
+        return super().create(validated_data)
 
     def validate_first_name(self, first_name):
         if self.instance:
@@ -89,30 +111,59 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 )
         return first_name
 
+    def validate_primary_email(self, primary_email):
+        org = getattr(self, 'org', None)
+        if not org:
+            raise serializers.ValidationError("Organization not found")
+
+        if self.instance:
+            if (
+                Contact.objects.filter(primary_email__iexact=primary_email, org=org)
+                .exclude(id=self.instance.id)
+                .exists()
+            ):
+                raise serializers.ValidationError(
+                    "Contact with this email already exists"
+                )
+        else:
+            if Contact.objects.filter(
+                primary_email__iexact=primary_email, org=org
+            ).exists():
+                raise serializers.ValidationError(
+                    "Contact with this email already exists"
+                )
+        return primary_email
+    def validate_company(self, company):
+        """Дополнительная валидация company_id"""
+        if company:
+            org = getattr(self, 'org', None)
+            if org and company.org != org:
+                raise serializers.ValidationError(
+                    "Company does not belong to your organization"
+                )
+        return company
+
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=CompanyProfile.objects.all(),
+        required=False,
+        allow_null=True
+    )
     class Meta:
         model = Contact
         fields = (
-            "salutation",
-            "first_name",
-            "last_name",
-            "organization",
-            "title",
-            "primary_email",
-            "secondary_email",
-            "mobile_number",
-            "secondary_number",
-            "department",
-            "country",
-            "language",
-            "do_not_call",
-            "address",
+
+            "salutation",        #  Popup field for selecting a salutation
+            "first_name",        #
+            "last_name",         #
+            "title",             #
+            "primary_email",     #
+            "mobile_number",     #
+            "language",          # Popup field for selecting a language
+            "do_not_call",       # Checkbox
             "description",
-            "linked_in_url",
-            "facebook_url",
-            "twitter_username",
-            #"teams",        # 
-            #"assigned_to",  # 
+            "company",        #  Popup field for selecting a company
         )
+
 
 
 class ContactDetailEditSwaggerSerializer(serializers.Serializer):
