@@ -71,7 +71,6 @@ class ContactSerializer(serializers.ModelSerializer):
         )
 
 class ContactBasicSerializer(serializers.ModelSerializer):
-    """Serializer для основной информации о контакте"""
 
     company = CompanyListSerializer(read_only=True)
     salutation_display = serializers.SerializerMethodField()
@@ -87,14 +86,14 @@ class ContactBasicSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "salutation",
-            "salutation_display",  # Отображаемое значение (Mr, Ms, etc.)
+            "salutation_display",  #  (Mr, Ms, etc.)
             "first_name",
             "last_name",
             "title",
             "primary_email",
             "mobile_number",
             "language",
-            "language_display",    # Отображаемое значение (English, Spanish, etc.)
+            "language_display",    # (English, Spanish, etc.)
             "do_not_call",
             "description",
             "company",
@@ -109,15 +108,12 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 org=self.org
             )
     def create(self, validated_data):
-        # ✅ Добавить как в companies
         request = self.context.get('request')
         if not request:
-            # Если нет request в context, берем из request_obj
             request = getattr(self, 'request_obj', None)
 
         if request and hasattr(request, 'profile') and request.profile:
             validated_data['org'] = request.profile.org
-            # ✅ BaseModel автоматически установит created_by
 
         return super().create(validated_data)
 
@@ -164,7 +160,6 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 )
         return primary_email
     def validate_company(self, company):
-        """Дополнительная валидация company_id"""
         if company:
             org = getattr(self, 'org', None)
             if org and company.org != org:
