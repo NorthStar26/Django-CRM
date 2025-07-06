@@ -54,11 +54,10 @@ class LeadListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         queryset = (
-            self.model.objects.filter(org=self.request.profile.org)
+            self.model.objects.filter(organization=self.request.profile.org)
             .exclude(status="converted")
             .select_related("created_by")
             .prefetch_related( 
-                "tags",
                 "assigned_to",
             )
         ).order_by("-id")
@@ -77,7 +76,7 @@ class LeadListView(APIView, LimitOffsetPagination):
             if params.get("title"):
                 queryset = queryset.filter(title__icontains=params.get("title"))
             if params.get("source"):
-                queryset = queryset.filter(source=params.get("source"))
+                queryset = queryset.filter(lead_source=params.get("source"))
             if params.getlist("assigned_to"):
                 queryset = queryset.filter(
                     assigned_to__id__in=params.get("assigned_to")
@@ -163,16 +162,17 @@ class LeadListView(APIView, LimitOffsetPagination):
         serializer = LeadCreateSerializer(data=data, request_obj=request)
         if serializer.is_valid():
             lead_obj = serializer.save(created_by=request.profile.user
-            , org=request.profile.org)
-            if data.get("tags",None):
-                tags = data.get("tags")
-                for t in tags:
-                    tag = Tags.objects.filter(slug=t.lower())
-                    if tag.exists():
-                        tag = tag[0]
-                    else:
-                        tag = Tags.objects.create(name=t)
-                    lead_obj.tags.add(tag)
+            , organization=request.profile.org)
+            # Tags are no longer part of the Lead model
+            # if data.get("tags",None):
+            #     tags = data.get("tags")
+            #     for t in tags:
+            #         tag = Tags.objects.filter(slug=t.lower())
+            #         if tag.exists():
+            #             tag = tag[0]
+            #         else:
+            #             tag = Tags.objects.create(name=t)
+            #         lead_obj.tags.add(tag)
 
             if data.get("contacts",None):
                 obj_contact = Contact.objects.filter(
@@ -209,9 +209,10 @@ class LeadListView(APIView, LimitOffsetPagination):
             if data.get("status") == "converted":
                 account_object = Account.objects.create(
                     created_by=request.profile.user,
-                    name=lead_obj.account_name,
-                    email=lead_obj.email,
-                    phone=lead_obj.phone,
+                    name=lead_obj.link,
+                    # Email and phone fields no longer exist in Lead model
+                    # email=lead_obj.email,
+                    # phone=lead_obj.phone,
                     description=data.get("description"),
                     website=data.get("website"),
                     org=request.profile.org,
@@ -436,24 +437,23 @@ class LeadDetailView(APIView):
             previous_assigned_to_users = list(
                 lead_obj.assigned_to.all().values_list("id", flat=True)
             )
-            lead_obj.tags.clear()
-            if params.get("tags"):
-                tags = params.get("tags")
-                # for t in tags:
-                #     tag,_ = Tags.objects.get_or_create(name=t)
-                #     lead_obj.tags.add(tag)
-                for t in tags:
-                    tag = Tags.objects.filter(slug=t.lower())
-                    if tag.exists():
-                        tag = tag[0]
-                    else:
-                        tag = Tags.objects.create(name=t)
-                    lead_obj.tags.add(tag)
+            # Tags are no longer part of the Lead model
+            # lead_obj.tags.clear()
+            # if params.get("tags"):
+            #     tags = params.get("tags")
+            #     for t in tags:
+            #         tag = Tags.objects.filter(slug=t.lower())
+            #         if tag.exists():
+            #             tag = tag[0]
+            #         else:
+            #             tag = Tags.objects.create(name=t)
+            #         lead_obj.tags.add(tag)
 
-            assigned_to_list = list(
-                lead_obj.assigned_to.all().values_list("id", flat=True)
-            )
-            recipients = list(set(assigned_to_list) - set(previous_assigned_to_users))
+            # assigned_to is now a ForeignKey, not ManyToMany
+            if lead_obj.assigned_to and lead_obj.assigned_to.id not in previous_assigned_to_users:
+                recipients = [lead_obj.assigned_to.id]
+            else:
+                recipients = []
             send_email_to_assigned_user.delay(
                 recipients,
                 lead_obj.id,
@@ -466,18 +466,20 @@ class LeadDetailView(APIView):
                 attachment.attachment = request.FILES.get("lead_attachment")
                 attachment.save()
 
-            lead_obj.contacts.clear()
+            # Contact is now a ForeignKey, not ManyToMany
             if params.get("contacts"):
                 obj_contact = Contact.objects.filter(
                     id=params.get("contacts"), org=request.profile.org
-                )
-                lead_obj.contacts.add(obj_contact)
+                ).first()
+                if obj_contact:
+                    lead_obj.contact = obj_contact
+                    lead_obj.save()
 
-            lead_obj.teams.clear()
-            if params.get("teams"):
-                teams_list = params.get("teams")
-                teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-                lead_obj.teams.add(*teams)
+            # Teams field has been removed from the Lead model
+            # if params.get("teams"):
+            #     teams_list = params.get("teams")
+            #     teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
+            #     lead_obj.teams.add(*teams)
 
             lead_obj.assigned_to.clear()
             if params.get("assigned_to"):
@@ -490,9 +492,10 @@ class LeadDetailView(APIView):
             if params.get("status") == "converted":
                 account_object = Account.objects.create(
                     created_by=request.profile.user,
-                    name=lead_obj.account_name,
-                    email=lead_obj.email,
-                    phone=lead_obj.phone,
+                    name=lead_obj.link,
+                    # Email and phone fields no longer exist in Lead model
+                    # email=lead_obj.email,
+                    # phone=lead_obj.phone,
                     description=params.get("description"),
                     website=params.get("website"),
                     lead=lead_obj,
