@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
 from django.http import Http404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
@@ -16,7 +17,18 @@ from .serializer import (
     CompanySwaggerListSerializer
 )
 from .swagger_params1 import company_list_get_params, company_auth_headers
-
+def format_serializer_errors(serializer_errors):
+    """Преобразует ошибки serializer в читаемый формат"""
+    if isinstance(serializer_errors, dict):
+        formatted_errors = []
+        for field, errors in serializer_errors.items():
+            if field == 'non_field_errors':
+                formatted_errors.extend([str(error) for error in errors])
+            else:
+                field_errors = [f"{field}: {str(error)}" for error in errors]
+                formatted_errors.extend(field_errors)
+        return "; ".join(formatted_errors) if formatted_errors else "Validation failed"
+    return str(serializer_errors)
 
 @extend_schema_view(
     get=extend_schema(
@@ -42,6 +54,10 @@ from .swagger_params1 import company_list_get_params, company_auth_headers
         }
     )
 )
+
+
+
+
 class CompanyListView(APIView):
     permission_classes = (IsAuthenticated,)
 
@@ -119,25 +135,32 @@ class CompanyListView(APIView):
                 context={'request': request}
             )
 
+
             if not company.is_valid():
-                error_messages = {}
-
-                for field, errors in company.errors.items():
-                    if field == 'non_field_errors':
-                        error_messages['general'] = [str(error) for error in errors]
-                    else:
-                        error_messages[field] = [str(error) for error in errors]
-
+                error_details = {k: [str(e) for e in v] for k, v in company.errors.items()}
+                error_message = format_serializer_errors(company.errors)
                 return Response(
                     {
                         "error": True,
-                        "message": "Validation failed",
-                        "details": error_messages
+                        "message": error_message,
+                        "details": error_details
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            company_instance = company.save()
+            try:
+                company_instance = company.save()
+            except serializers.ValidationError as e:
+                # Handling errors thrown in create()
+                error_details = {k: [str(vv) for vv in v] for k, v in e.detail.items()}
+                return Response(
+                    {
+                        "error": True,
+                        "message": "Validation error",
+                        "details": error_details
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             return Response(
                 {
@@ -165,12 +188,12 @@ class CompanyListView(APIView):
             )
 
         except ValidationError as e:
+            error_message = str(e)
+            if hasattr(e, 'message_dict'):
+                error_message = format_serializer_errors(e.message_dict)
+
             return Response(
-                {
-                    "error": True,
-                    "message": "Validation error",
-                    "details": e.message_dict if hasattr(e, 'message_dict') else str(e)
-                },
+                {"error": True, "message": error_message},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -267,10 +290,12 @@ class CompanyDetailView(APIView):
                 {"error": False, "data": CompanyDetailSerializer(updated_company).data, 'message': 'Updated Successfully'},
                 status=status.HTTP_200_OK,
             )
+        error_message = format_serializer_errors(serializer.errors)
         return Response(
-            {"error": True, 'message': serializer.errors},
+            {"error": True, 'message': error_message},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
 
     @extend_schema(tags=["Companies"], parameters=company_auth_headers)
     def delete(self, request, pk, format=None):
