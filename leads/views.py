@@ -19,12 +19,13 @@ from common.serializer import (
     ProfileSerializer,
 )
 from .forms import LeadListForm
-from .models import Company,Lead
+from .models import Lead
 from common.utils import COUNTRIES, INDCHOICES, LEAD_SOURCE, LEAD_STATUS
 from contacts.models import Contact
 from leads import swagger_params1
 from leads.forms import LeadListForm
-from leads.models import Company, Lead
+from leads.models import Lead
+from companies.models import CompanyProfile
 from leads.serializer import (
     CompanySerializer,
     CompanySwaggerSerializer,
@@ -136,7 +137,7 @@ class LeadListView(APIView, LimitOffsetPagination):
         context["status"] = LEAD_STATUS
         context["source"] = LEAD_SOURCE
         context["companies"] = CompanySerializer(
-            Company.objects.filter(org=self.request.profile.org), many=True
+            CompanyProfile.objects.filter(), many=True
         ).data
         context["tags"] = TagsSerializer(Tags.objects.all(), many=True).data
 
@@ -749,13 +750,13 @@ class CompaniesView(APIView):
     @extend_schema(tags=["Company"],parameters=swagger_params1.organization_params)
     def get(self, request, *args, **kwargs):
         try:
-            companies=Company.objects.filter(org=request.profile.org)
+            companies=CompanyProfile.objects.all()
             serializer=CompanySerializer(companies,many=True)
             return Response(
                     {"error": False, "data": serializer.data},
                     status=status.HTTP_200_OK,
                 )
-        except:
+        except Exception as e:
             return Response(
                 {"error": True, "message": "Organization is missing"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -769,9 +770,10 @@ class CompaniesView(APIView):
         request.data['org'] = request.profile.org.id
         print(request.data)
         company=CompanySerializer(data=request.data)
-        if Company.objects.filter(**request.data).exists():
+        name = request.data.get('name')
+        if name and CompanyProfile.objects.filter(name=name).exists():
             return Response(
-                {"error": True, "message": "This data already exists"},
+                {"error": True, "message": "A company with this name already exists"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if company.is_valid():
@@ -793,10 +795,10 @@ class CompanyDetail(APIView):
     
     def get_object(self, pk):
         try:
-            return Company.objects.get(
+            return CompanyProfile.objects.get(
                 pk=pk
             )
-        except Company.DoesNotExist:
+        except CompanyProfile.DoesNotExist:
             raise Http404
 
     @extend_schema(tags=["Company"],parameters=swagger_params1.organization_params)
