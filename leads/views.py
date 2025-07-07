@@ -137,6 +137,8 @@ class LeadListView(APIView, LimitOffsetPagination):
         context["companies"] = CompanySerializer(
             CompanyProfile.objects.filter(), many=True
         ).data
+        # Note: Lead model no longer has tags, but we still include available tags in context
+        # for other models or potential future use
         context["tags"] = TagsSerializer(Tags.objects.all(), many=True).data
 
         users = Profile.objects.filter(
@@ -250,8 +252,9 @@ class LeadListView(APIView, LimitOffsetPagination):
                 if attachments.exists():
                     for attachment in attachments:
                         attachment.account_id = account_object.id
-                for tag in lead_obj.tags.all():
-                    account_object.tags.add(tag)
+                # Removed tags copying as Lead model doesn't have tags field
+                # for tag in lead_obj.tags.all():
+                #     account_object.tags.add(tag)
 
                 if data.get("assigned_to", None):
                     assigned_to_list = data.getlist("assigned_to")
@@ -543,8 +546,9 @@ class LeadDetailView(APIView):
                 if attachments.exists():
                     for attachment in attachments:
                         attachment.account_id = account_object.id
-                for tag in lead_obj.tags.all():
-                    account_object.tags.add(tag)
+                # Removed tags copying as Lead model doesn't have tags field
+                # for tag in lead_obj.tags.all():
+                #     account_object.tags.add(tag)
                 if params.get("assigned_to"):
                     # account_object.assigned_to.add(*params.getlist('assigned_to'))
                     assigned_to_list = params.get("assigned_to")
