@@ -89,11 +89,6 @@ class LeadCreateSerializer(serializers.ModelSerializer):
             "contact",
             "company",
             "organization",
-            "industry",
-            "company",
-            "organization",
-            "probability",
-            "close_date",
             # "lead_attachment",
         )
 
