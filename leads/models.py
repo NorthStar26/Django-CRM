@@ -58,12 +58,8 @@ class Lead(BaseModel):
         blank=True,
         related_name="lead_organization",
     )
-    created_by = models.ForeignKey(
-        Profile, related_name="lead_created_by", on_delete=models.SET_NULL, null=True
-    )
-    updated_by = models.ForeignKey(
-        Profile, related_name="lead_updated_by", on_delete=models.SET_NULL, null=True
-    )
+    # Removed explicit created_by and updated_by fields to use those from BaseModel
+    # which reference common.User instead of Profile
 
     class Meta:
         verbose_name = "Lead"
