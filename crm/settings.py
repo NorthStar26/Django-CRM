@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "events",
     "teams",
     "companies",
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
@@ -368,3 +369,5 @@ PASSWORD_RESET_TIMEOUT =43200  # seconds
 RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
 DOMAIN_NAME = os.environ["DOMAIN_NAME"]
 SWAGGER_ROOT_URL = os.environ["SWAGGER_ROOT_URL"]
+
+APPEND_SLASH=False

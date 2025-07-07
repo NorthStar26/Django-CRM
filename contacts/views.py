@@ -16,15 +16,15 @@ from common.serializer import (
     CommentSerializer,
 )
 from common.utils import COUNTRIES
-
+from contacts.models import Contact, SALUTATION_CHOICES, LANGUAGE_CHOICES
 #from common.external_auth import CustomDualAuthentication
 from contacts import swagger_params1
-from contacts.models import Contact, Profile
 from contacts.serializer import *
 from contacts.tasks import send_email_to_assigned_user
 from tasks.serializer import TaskSerializer
 from teams.models import Teams
-
+from companies.models import CompanyProfile
+from contacts.serializer import ContactBasicSerializer
 
 class ContactsListView(APIView, LimitOffsetPagination):
     #authentication_classes = (CustomDualAuthentication,)
@@ -37,7 +37,7 @@ class ContactsListView(APIView, LimitOffsetPagination):
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
-                | Q(created_by=self.request.profile.user)
+                | Q(created_by=self.request.profile)
             ).distinct()
 
         if params:
@@ -86,58 +86,74 @@ class ContactsListView(APIView, LimitOffsetPagination):
         return Response(context)
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params,request=CreateContactSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=CreateContactSerializer
     )
-    def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs): ##new version ##
         params = request.data
-        contact_serializer = CreateContactSerializer(data=params, request_obj=request)
-        address_serializer = BillingAddressSerializer(data=params)
 
-        data = {}
-        if not contact_serializer.is_valid():
-            data["contact_errors"] = contact_serializer.errors
-        if not address_serializer.is_valid():
-            data["address_errors"] = (address_serializer.errors,)
-        if data:
+        if not hasattr(request, 'profile') or not request.profile:
             return Response(
-                {"error": True, "errors": data},
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        if request.profile.role != "ADMIN" and not request.profile.is_admin:
+            if not request.profile.is_active:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have Permission to perform this action",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        if not request.profile.org:
+            return Response(
+                {"error": True, "errors": "Organization not found"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # if contact_serializer.is_valid() and address_serializer.is_valid():
-        address_obj = address_serializer.save()
-        contact_obj = contact_serializer.save(date_of_birth=params.get("date_of_birth"))
-        contact_obj.address = address_obj
-        contact_obj.org = request.profile.org
-        contact_obj.save()
+        #  CreateContactSerializer expects a request_obj
+        contact_serializer = CreateContactSerializer(
+            data=params,
+            request_obj=request,
+            context={'request': request}  # Add context to the serializer
+            )
 
-        if params.get("teams"):
-            teams_list = params.get("teams")
-            teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-            contact_obj.teams.add(*teams)
+        if not contact_serializer.is_valid():
+            return Response(
+                {"error": True, "errors": contact_serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if params.get("assigned_to"):
-            assinged_to_list = params.get("assigned_to")
-            profiles = Profile.objects.filter(id__in=assinged_to_list, org=request.profile.org)
-            contact_obj.assigned_to.add(*profiles)
+        try:
+            contact_obj = contact_serializer.save()
+            contact_obj.org = request.profile.org
+            contact_obj.is_active = True
+            contact_obj.save()
 
-        recipients = list(contact_obj.assigned_to.all().values_list("id", flat=True))
-        send_email_to_assigned_user.delay(
-            recipients,
-            contact_obj.id,
+            print(f"Contact created successfully: {contact_obj.id}")
+            print(f"Created by: {request.profile.user.email}")
+            print(f"Organization: {request.profile.org}")
+            print(f"Is active: {contact_obj.is_active}")
+
+            return Response(
+            {
+                "error": False,
+                "message": "Contact created successfully",
+                "contact_id": str(contact_obj.id),
+            },
+            status=status.HTTP_201_CREATED,
         )
 
-        if request.FILES.get("contact_attachment"):
-            attachment = Attachments()
-            attachment.created_by = request.profile.user
-            attachment.file_name = request.FILES.get("contact_attachment").name
-            attachment.contact = contact_obj
-            attachment.attachment = request.FILES.get("contact_attachment")
-            attachment.save()
-        return Response(
-            {"error": False, "message": "Contact created Successfuly"},
-            status=status.HTTP_200_OK,
-        )
 
+        except Exception as e:
+            import traceback
+            print(f"Error creating contact: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": True, "errors": f"Failed to create contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class ContactDetailView(APIView):
     # #authentication_classes = (CustomDualAuthentication,)
@@ -148,117 +164,21 @@ class ContactDetailView(APIView):
         return get_object_or_404(Contact, pk=pk)
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.contact_create_post_params,request=CreateContactSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=CreateContactSerializer
     )
-    def put(self, request, pk, format=None):
-        data = request.data
-        contact_obj = self.get_object(pk=pk)
-        address_obj = contact_obj.address
-        if contact_obj.org != request.profile.org:
+    def patch(self, request, pk, format=None):  # new version - partial update
+        """Partially update a specific contact by ID"""
+
+        params = request.data
+        if not hasattr(request, 'profile') or not request.profile:
             return Response(
-                {"error": True, "errors": "User company doesnot match with header...."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
-        contact_serializer = CreateContactSerializer(
-            data=data, instance=contact_obj, request_obj=request
-        )
-        address_serializer = BillingAddressSerializer(data=data, instance=address_obj)
-        data = {}
-        if not contact_serializer.is_valid():
-            data["contact_errors"] = contact_serializer.errors
-        if not address_serializer.is_valid():
-            data["address_errors"] = (address_serializer.errors,)
-        if data:
-            data["error"] = True
-            return Response(
-                data,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if contact_serializer.is_valid():
-            if (
-                self.request.profile.role != "ADMIN"
-                and not self.request.profile.is_admin
-            ):
-                if not (
-                    (self.request.profile == contact_obj.created_by)
-                    or (self.request.profile in contact_obj.assigned_to.all())
-                ):
-                    return Response(
-                        {
-                            "error": True,
-                            "errors": "You do not have Permission to perform this action",
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-
-            address_obj = address_serializer.save()
-            contact_obj = contact_serializer.save(
-                date_of_birth=data.get("date_of_birth")
-            )
-            contact_obj.address = address_obj
-            contact_obj.save()
-            contact_obj = contact_serializer.save()
-            contact_obj.teams.clear()
-            if data.get("teams"):
-                teams_list = json.loads(data.get("teams"))
-                teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-                contact_obj.teams.add(*teams)
-
-            contact_obj.assigned_to.clear()
-            if data.get("assigned_to"):
-                assinged_to_list = json.loads(data.get("assigned_to"))
-                profiles = Profile.objects.filter(
-                    id__in=assinged_to_list, org=request.profile.org
-                )
-                contact_obj.assigned_to.add(*profiles)
-
-            previous_assigned_to_users = list(
-                contact_obj.assigned_to.all().values_list("id", flat=True)
-            )
-
-            assigned_to_list = list(
-                contact_obj.assigned_to.all().values_list("id", flat=True)
-            )
-            recipients = list(set(assigned_to_list) - set(previous_assigned_to_users))
-            send_email_to_assigned_user.delay(
-                recipients,
-                contact_obj.id,
-            )
-            if request.FILES.get("contact_attachment"):
-                attachment = Attachments()
-                attachment.created_by = request.profile.user
-                attachment.file_name = request.FILES.get("contact_attachment").name
-                attachment.contact = contact_obj
-                attachment.attachment = request.FILES.get("contact_attachment")
-                attachment.save()
-            return Response(
-                {"error": False, "message": "Contact Updated Successfully"},
-                status=status.HTTP_200_OK,
-            )
-
-    @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params
-    )
-    def get(self, request, pk, format=None):
-        context = {}
-        contact_obj = self.get_object(pk)
-        context["contact_obj"] = ContactSerializer(contact_obj).data
-        user_assgn_list = [
-            assigned_to.id for assigned_to in contact_obj.assigned_to.all()
-        ]
-        user_assigned_accounts = set(
-            self.request.profile.account_assigned_users.values_list("id", flat=True)
-        )
-        contact_accounts = set(
-            contact_obj.account_contacts.values_list("id", flat=True)
-        )
-        if user_assigned_accounts.intersection(contact_accounts):
-            user_assgn_list.append(self.request.profile.id)
-        if self.request.profile == contact_obj.created_by:
-            user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
-            if self.request.profile.id not in user_assgn_list:
+        if request.profile.role != "ADMIN" and not request.profile.is_admin:
+            if not request.profile.is_active:
                 return Response(
                     {
                         "error": True,
@@ -266,75 +186,171 @@ class ContactDetailView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        assigned_data = []
-        for each in contact_obj.assigned_to.all():
-            assigned_dict = {}
-            assigned_dict["id"] = each.user.id
-            assigned_dict["name"] = each.user.email
-            assigned_data.append(assigned_dict)
-
-        if self.request.profile.is_admin or self.request.profile.role == "ADMIN":
-            users_mention = list(
-                Profile.objects.filter(is_active=True, org=request.profile.org).values(
-                    "user__email"
-                )
-            )
-        elif self.request.profile != contact_obj.created_by:
-            users_mention = [{"username": contact_obj.created_by.user.email}]
-        else:
-            users_mention = list(contact_obj.assigned_to.all().values("user__email"))
-
-        if request.profile == contact_obj.created_by:
-            user_assgn_list.append(self.request.profile.id)
-
-        context["address_obj"] = BillingAddressSerializer(contact_obj.address).data
-        context["countries"] = COUNTRIES
-        context.update(
-            {
-                "comments": CommentSerializer(
-                    contact_obj.contact_comments.all(), many=True
-                ).data,
-                "attachments": AttachmentsSerializer(
-                    contact_obj.contact_attachment.all(), many=True
-                ).data,
-                "assigned_data": assigned_data,
-                "tasks": TaskSerializer(
-                    contact_obj.contacts_tasks.all(), many=True
-                ).data,
-                "users_mention": users_mention,
-            }
-        )
-        return Response(context)
-
-    @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params
-    )
-    def delete(self, request, pk, format=None):
-        self.object = self.get_object(pk)
-        if self.object.org != request.profile.org:
+        if not request.profile.org:
             return Response(
-                {"error": True, "errors": "User company doesnot match with header...."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": True, "errors": "Organization not found"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        if (
-            self.request.profile.role != "ADMIN"
-            and not self.request.profile.is_admin
-            and self.request.profile != self.object.created_by
-        ):
+        try:
+            contact_obj = self.get_object(pk)
+            if contact_obj.org != request.profile.org:
+                return Response(
+                    {"error": True, "errors": "Contact not found in your organization"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if request.profile.role != "ADMIN" and not request.profile.is_admin:
+                if request.profile != contact_obj.created_by:
+                    return Response(
+                        {
+                            "error": True,
+                            "errors": "You do not have Permission to update this contact",
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            contact_serializer = CreateContactSerializer(
+                data=params,
+                instance=contact_obj,
+                request_obj=request,
+                context={'request': request},
+                partial=True
+            )
+            if not contact_serializer.is_valid():
+                return Response(
+                    {"error": True, "errors": contact_serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            updated_contact = contact_serializer.save()
+            updated_data = ContactBasicSerializer(updated_contact).data
+
+            print(f"Contact partially updated: {updated_contact.id}")
+            print(f"Updated by: {request.profile.user.email}")
+            print(f"Updated fields: {list(params.keys())}")
+
             return Response(
                 {
-                    "error": True,
-                    "errors": "You don't have permission to perform this action.",
+                    "error": False,
+                    "message": "Contact updated successfully",
+                    "contact_id": str(updated_contact.id),
+                    "updated_contact": updated_data
                 },
-                status=status.HTTP_403_FORBIDDEN,
+                status=status.HTTP_200_OK,
             )
-        if self.object.address_id:
-            self.object.address.delete()
-        self.object.delete()
-        return Response(
-            {"error": False, "message": "Contact Deleted Successfully."},
-            status=status.HTTP_200_OK,
-        )
+
+        except Contact.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Contact not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            import traceback
+            print(f"Error updating contact: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": True, "errors": f"Failed to update contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @extend_schema(
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params
+)
+    def get(self, request, pk, format=None):  # New version Get by id
+        """Get a specific contact by ID"""
+
+        if not hasattr(request, 'profile') or not request.profile:
+            return Response(
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            contact_obj = self.get_object(pk)
+
+            if contact_obj.org != request.profile.org:
+                return Response(
+                    {"error": True, "errors": "Contact not found in your organization"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if request.profile.role != "ADMIN" and not request.profile.is_admin:
+                if request.profile != contact_obj.created_by:
+                    return Response(
+                        {
+                            "error": True,
+                            "errors": "You do not have Permission to view this contact",
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            contact_data = ContactBasicSerializer(contact_obj).data
+
+            context = {
+                "error": False,
+                "contact": contact_data
+            }
+
+            return Response(context, status=status.HTTP_200_OK)
+
+        except Contact.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Contact not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "errors": f"Failed to retrieve contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @extend_schema(
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params
+    )
+    def delete(self, request, pk, format=None):  # NEW version
+        """Delete a specific contact by ID"""
+        if not hasattr(request, 'profile') or not request.profile:
+            return Response(
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            contact_obj = self.get_object(pk)
+            if contact_obj.org != request.profile.org:
+                return Response(
+                    {"error": True, "errors": "Contact not found in your organization"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if request.profile.role != "ADMIN" and not request.profile.is_admin:
+                if request.profile != contact_obj.created_by:
+                    return Response(
+                        {
+                            "error": True,
+                            "errors": "You do not have Permission to delete this contact",
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            contact_obj.delete()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Contact deleted successfully",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Contact.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Contact not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "errors": f"Failed to delete contact: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["contacts"], parameters=swagger_params1.organization_params,request=ContactDetailEditSwaggerSerializer
@@ -366,7 +382,7 @@ class ContactDetailView(APIView):
 
         if self.request.FILES.get("contact_attachment"):
             attachment = Attachments()
-            attachment.created_by = self.request.profile.user
+            attachment.created_by = request.profile
             attachment.file_name = self.request.FILES.get("contact_attachment").name
             attachment.contact = self.contact_obj
             attachment.attachment = self.request.FILES.get("contact_attachment")
