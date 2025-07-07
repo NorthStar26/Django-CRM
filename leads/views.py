@@ -59,7 +59,6 @@ class LeadListView(APIView, LimitOffsetPagination):
             .exclude(status="converted")
             .select_related("created_by")
             .prefetch_related(
-                "tags",
                 "assigned_to",
             )
         ).order_by("-id")
@@ -83,8 +82,9 @@ class LeadListView(APIView, LimitOffsetPagination):
                 )
             if params.get("status"):
                 queryset = queryset.filter(status=params.get("status"))
-            if params.get("tags"):
-                queryset = queryset.filter(tags__in=params.get("tags"))
+            # Removed tags filtering as Lead model doesn't have tags field
+            # if params.get("tags"):
+            #     queryset = queryset.filter(tags__in=params.get("tags"))
             if params.get("city"):
                 queryset = queryset.filter(city__icontains=params.get("city"))
             if params.get("email"):
@@ -185,15 +185,16 @@ class LeadListView(APIView, LimitOffsetPagination):
             lead_obj = serializer.save(
                 created_by=request.profile.user, org=request.profile.org
             )
-            if data.get("tags", None):
-                tags = data.get("tags")
-                for t in tags:
-                    tag = Tags.objects.filter(slug=t.lower())
-                    if tag.exists():
-                        tag = tag[0]
-                    else:
-                        tag = Tags.objects.create(name=t)
-                    lead_obj.tags.add(tag)
+            # Removed tags handling as Lead model doesn't have tags field
+            # if data.get("tags", None):
+            #     tags = data.get("tags")
+            #     for t in tags:
+            #         tag = Tags.objects.filter(slug=t.lower())
+            #         if tag.exists():
+            #             tag = tag[0]
+            #         else:
+            #             tag = Tags.objects.create(name=t)
+            #         lead_obj.tags.add(tag)
 
             if data.get("contacts", None):
                 obj_contact = Contact.objects.filter(
