@@ -67,11 +67,35 @@ class LeadSerializer(serializers.ModelSerializer):
 
 class LeadCreateSerializer(serializers.ModelSerializer):
     probability = serializers.IntegerField(max_value=100)
+    assigned_to = serializers.UUIDField()  # Accept UUID for assigned_to
 
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
         super().__init__(*args, **kwargs)
         self.org = request_obj.profile.org
+        self.request_obj = request_obj
+
+    def create(self, validated_data):
+        # Convert 'org' to 'organization' if present
+        if "org" in validated_data:
+            validated_data["organization"] = validated_data.pop("org")
+
+        # Convert assigned_to UUID to Profile instance
+        if "assigned_to" in validated_data:
+            from common.models import Profile
+
+            assigned_to_id = validated_data.pop("assigned_to")
+            try:
+                profile = Profile.objects.get(
+                    id=assigned_to_id, org=self.request_obj.profile.org
+                )
+                validated_data["assigned_to"] = profile
+            except Profile.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"assigned_to": ["Invalid profile ID"]}
+                )
+
+        return super().create(validated_data)
 
     # Removed validation methods for fields that no longer exist
 
@@ -94,6 +118,35 @@ class LeadCreateSerializer(serializers.ModelSerializer):
 
 
 class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(help_text="Description of the lead")
+    link = serializers.CharField(
+        help_text="Related link (e.g., meeting notes, website)", required=False
+    )
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, help_text="Potential deal amount"
+    )
+    probability = serializers.IntegerField(
+        help_text="Probability of conversion (0-100)", min_value=0, max_value=100
+    )
+    status = serializers.CharField(
+        help_text="Status of the lead (assigned, in process, converted, recycled, closed)"
+    )
+    lead_source = serializers.CharField(
+        help_text="Source of the lead (call, email, existing customer, partner, public relations, campaign, website, other)"
+    )
+    notes = serializers.CharField(
+        help_text="Additional notes about the lead", required=False
+    )
+    assigned_to = serializers.UUIDField(
+        help_text="UUID of the Profile to assign this lead to"
+    )
+    contact = serializers.UUIDField(
+        help_text="UUID of the Contact associated with this lead"
+    )
+    company = serializers.UUIDField(
+        help_text="UUID of the Company associated with this lead"
+    )
+
     class Meta:
         model = Lead
         fields = [

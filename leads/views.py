@@ -157,6 +157,25 @@ class LeadListView(APIView, LimitOffsetPagination):
         description="Leads Create",
         parameters=swagger_params1.organization_params,
         request=LeadCreateSwaggerSerializer,
+        examples=[
+            OpenApiExample(
+                "Lead Example",
+                summary="Create a new lead",
+                value={
+                    "description": "Potential client for software development services",
+                    "link": "https://example.com/meeting-notes",
+                    "amount": "50000.00",
+                    "probability": 75,
+                    "status": "in process",
+                    "lead_source": "email",
+                    "notes": "Initial contact made via email, interested in our product suite",
+                    "contact": "fe3e240f-0664-4288-868d-6b63511daa59",
+                    "company": "ee3dddad-21ab-4b22-9ab4-076d3a28a0ac",
+                    "assigned_to": "7daf9e00-328c-47cd-af57-0e1fe8e43190"
+                },
+                request_only=True,
+            )
+        ],
     )
     def post(self, request, *args, **kwargs):
         print("test")
@@ -182,7 +201,8 @@ class LeadListView(APIView, LimitOffsetPagination):
                 )
                 lead_obj.contacts.add(*obj_contact)
 
-            recipients = list(lead_obj.assigned_to.all().values_list("id", flat=True))
+            # Handle assigned_to as a single Profile object, not a queryset
+            recipients = [lead_obj.assigned_to.id] if lead_obj.assigned_to else []
             send_email_to_assigned_user.delay(
                 recipients,
                 lead_obj.id,
@@ -201,12 +221,8 @@ class LeadListView(APIView, LimitOffsetPagination):
                 teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
                 lead_obj.teams.add(*teams)
 
-            if data.get("assigned_to", None):
-                assinged_to_list = data.get("assigned_to")
-                profiles = Profile.objects.filter(
-                    id__in=assinged_to_list, org=request.profile.org
-                )
-                lead_obj.assigned_to.add(*profiles)
+            # Skip handling of assigned_to here as it's already set as a ForeignKey
+            # The assigned_to is now directly set in serializer.save()
 
             if data.get("status") == "converted":
                 account_object = Account.objects.create(
