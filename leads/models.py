@@ -13,6 +13,7 @@ from contacts.models import Contact
 
 # Removed Company model, using CompanyProfile from companies app instead
 
+
 class Lead(BaseModel):
     description = models.TextField(blank=True, null=True)
     link = models.CharField(_("Link"), max_length=255, blank=True, null=True)
@@ -27,47 +28,41 @@ class Lead(BaseModel):
         _("Source of Lead"), max_length=255, blank=True, null=True, choices=LEAD_SOURCE
     )
     notes = models.TextField(blank=True, null=True)
-    
+
     # Relationships
     assigned_to = models.ForeignKey(
-        Profile, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name="lead_assigned_to"
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead_assigned_to",
     )
     contact = models.ForeignKey(
-        Contact, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        Contact,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        related_name="lead_contact"
+        related_name="lead_contact",
     )
     company = models.ForeignKey(
-        "companies.CompanyProfile", 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        "companies.CompanyProfile",
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        related_name="lead_company"
+        related_name="lead_company",
     )
     organization = models.ForeignKey(
-        Org, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name="lead_organization"
+        Org,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead_organization",
     )
     created_by = models.ForeignKey(
-        Profile,
-        related_name="lead_created_by",
-        on_delete=models.SET_NULL,
-        null=True
+        Profile, related_name="lead_created_by", on_delete=models.SET_NULL, null=True
     )
     updated_by = models.ForeignKey(
-        Profile,
-        related_name="lead_updated_by",
-        on_delete=models.SET_NULL,
-        null=True
+        Profile, related_name="lead_updated_by", on_delete=models.SET_NULL, null=True
     )
 
     class Meta:

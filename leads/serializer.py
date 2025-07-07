@@ -24,6 +24,7 @@ class CompanySwaggerSerializer(serializers.ModelSerializer):
         model = CompanyProfile
         fields = ("name",)
 
+
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyProfile
@@ -105,32 +106,59 @@ class LeadCreateSerializer(serializers.ModelSerializer):
             # "lead_attachment",
         )
 
+
 class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ["title","first_name","last_name","account_name","phone","email","lead_attachment","opportunity_amount","website",
-                "description","teams","assigned_to","contacts","status","source","address_line","street","city","state","postcode",
-                "country","tags","company","probability","industry","skype_ID"]
+        fields = [
+            "title",
+            "first_name",
+            "last_name",
+            "account_name",
+            "phone",
+            "email",
+            "lead_attachment",
+            "opportunity_amount",
+            "website",
+            "description",
+            "teams",
+            "assigned_to",
+            "contacts",
+            "status",
+            "source",
+            "address_line",
+            "street",
+            "city",
+            "state",
+            "postcode",
+            "country",
+            "tags",
+            "company",
+            "probability",
+            "industry",
+            "skype_ID",
+        ]
 
 
 class CreateLeadFromSiteSwaggerSerializer(serializers.Serializer):
-    apikey=serializers.CharField()
-    title=serializers.CharField()
-    first_name=serializers.CharField()
-    last_name=serializers.CharField()
-    phone=serializers.CharField()
-    email=serializers.CharField()
-    source=serializers.CharField()
-    description=serializers.CharField()
+    apikey = serializers.CharField()
+    title = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone = serializers.CharField()
+    email = serializers.CharField()
+    source = serializers.CharField()
+    description = serializers.CharField()
 
 
 class LeadDetailEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
     lead_attachment = serializers.FileField()
 
+
 class LeadCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
 
+
 class LeadUploadSwaggerSerializer(serializers.Serializer):
     leads_file = serializers.FileField()
-
