@@ -71,14 +71,12 @@ class LeadListView(APIView, LimitOffsetPagination):
 
         if params:
             if params.get("name"):
-                queryset = queryset.filter(
-                    Q(first_name__icontains=params.get("name"))
-                    & Q(last_name__icontains=params.get("name"))
-                )
-            if params.get("title"):
-                queryset = queryset.filter(title__icontains=params.get("title"))
-            if params.get("source"):
-                queryset = queryset.filter(source=params.get("source"))
+                # Name search removed as we no longer have first_name and last_name fields
+                pass
+            if params.get("description"):
+                queryset = queryset.filter(description__icontains=params.get("description"))
+            if params.get("lead_source"):
+                queryset = queryset.filter(lead_source=params.get("lead_source"))
             if params.getlist("assigned_to"):
                 queryset = queryset.filter(
                     assigned_to__id__in=params.get("assigned_to")
@@ -723,40 +721,40 @@ class CreateLeadFromSite(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if api_setting and params.get("email") and params.get("title"):
+        if api_setting and params.get("description"):
             # user = User.objects.filter(is_admin=True, is_active=True).first()
             user = api_setting.created_by
-            lead = Lead.objects.create(
-                title=params.get("title"),
-                first_name=params.get("first_name"),
-                last_name=params.get("last_name"),
-                status="assigned",
-                source=api_setting.website,
-                description=params.get("message"),
-                email=params.get("email"),
-                phone=params.get("phone"),
-                is_active=True,
-                created_by=user,
-                org=api_setting.org,
-            )
-            lead.assigned_to.add(user)
-            # Send Email to Assigned Users
-            site_address = request.scheme + "://" + request.META["HTTP_HOST"]
-            send_lead_assigned_emails.delay(lead.id, [user.id], site_address)
-            # Create Contact
+            
+            # Create Contact first
             try:
+                # We need contact info from the form or use default values
+                contact_name = params.get("contact_name", "Website Visitor")
                 contact = Contact.objects.create(
-                    first_name=params.get("title"),
-                    email=params.get("email"),
-                    phone=params.get("phone"),
-                    description=params.get("message"),
+                    first_name=contact_name,
+                    email=params.get("email", ""),
+                    phone=params.get("phone", ""),
+                    description=params.get("message", ""),
                     created_by=user,
                     is_active=True,
                     org=api_setting.org,
                 )
-                contact.assigned_to.add(user)
-
-                lead.contacts.add(contact)
+                
+                # Create Lead with the contact
+                lead = Lead.objects.create(
+                    status="assigned",
+                    lead_source=api_setting.website,
+                    description=params.get("description"),
+                    notes=params.get("message", ""),
+                    created_by=user,
+                    contact=contact,
+                    organization=api_setting.org,
+                )
+                lead.assigned_to = user
+                lead.save()
+                
+                # Send Email to Assigned Users
+                site_address = request.scheme + "://" + request.META["HTTP_HOST"]
+                send_lead_assigned_emails.delay(lead.id, [user.id], site_address)
             except Exception:
                 pass
 

@@ -78,26 +78,17 @@ class LeadCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
         fields = (
-            "first_name",
-            "last_name",
-            "account_name",
-            "title",
-            "phone",
-            "email",
-            "status",
-            "source",
-            "website",
             "description",
-            "address_line",
-            # "contacts",
-            "street",
-            "city",
-            "state",
-            "postcode",
-            "opportunity_amount",
-            "country",
-            "org",
-            "skype_ID",
+            "link",
+            "amount",
+            "probability",
+            "status",
+            "lead_source",
+            "notes",
+            "assigned_to",
+            "contact",
+            "company",
+            "organization",
             "industry",
             "company",
             "organization",
@@ -111,44 +102,30 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
         fields = [
-            "title",
-            "first_name",
-            "last_name",
-            "account_name",
-            "phone",
-            "email",
-            "lead_attachment",
-            "opportunity_amount",
-            "website",
             "description",
-            "teams",
-            "assigned_to",
-            "contacts",
-            "status",
-            "source",
-            "address_line",
-            "street",
-            "city",
-            "state",
-            "postcode",
-            "country",
-            "tags",
-            "company",
+            "link",
+            "amount",
             "probability",
-            "industry",
-            "skype_ID",
+            "status",
+            "lead_source",
+            "notes",
+            "assigned_to",
+            "contact",
+            "company",
+            "organization",
+            "lead_attachment",
         ]
 
 
 class CreateLeadFromSiteSwaggerSerializer(serializers.Serializer):
     apikey = serializers.CharField()
-    title = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    phone = serializers.CharField()
-    email = serializers.CharField()
-    source = serializers.CharField()
     description = serializers.CharField()
+    link = serializers.CharField(required=False)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    probability = serializers.IntegerField(required=False)
+    status = serializers.CharField()
+    lead_source = serializers.CharField()
+    notes = serializers.CharField(required=False)
 
 
 class LeadDetailEditSwaggerSerializer(serializers.Serializer):
