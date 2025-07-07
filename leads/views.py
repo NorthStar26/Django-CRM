@@ -55,7 +55,7 @@ class LeadListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         queryset = (
-            self.model.objects.filter(org=self.request.profile.org)
+            self.model.objects.filter(organization=self.request.profile.org)  # Updated from org to organization
             .exclude(status="converted")
             .select_related("created_by")
             .prefetch_related(
