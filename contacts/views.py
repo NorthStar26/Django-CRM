@@ -34,25 +34,36 @@ class ContactsListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
+
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
                 | Q(created_by=self.request.profile)
             ).distinct()
-
+# Applying filters from request parameters
         if params:
             if params.get("name"):
-                queryset = queryset.filter(first_name__icontains=params.get("name"))
+                queryset = queryset.filter(
+                    Q(first_name__icontains=params.get("name")) |
+                    Q(last_name__icontains=params.get("name"))
+                )
             if params.get("city"):
                 queryset = queryset.filter(address__city__icontains=params.get("city"))
             if params.get("phone"):
                 queryset = queryset.filter(mobile_number__icontains=params.get("phone"))
             if params.get("email"):
                 queryset = queryset.filter(primary_email__icontains=params.get("email"))
-            if params.getlist("assigned_to"):
-                queryset = queryset.filter(
-                    assigned_to__id__in=params.get("assigned_to")
-                ).distinct()
+            if params.get("company"):
+                queryset = queryset.filter(company_id=params.get("company"))
+                print(f"Filtering by company: {params.get('company')}")
+                print(f"Contacts found: {queryset.count()}")
+            if params.get("company_name"):
+                queryset = queryset.filter(company__name__icontains=params.get("company_name"))
+                print(f"Filtering by company name: {params.get('company_name')}")
+                print(f"Contacts found: {queryset.count()}")
+            #     queryset = queryset.filter(
+            #         assigned_to__id__in=params.get("assigned_to")
+            #     ).distinct()
 
         context = {}
         results_contact = self.paginate_queryset(
@@ -70,11 +81,18 @@ class ContactsListView(APIView, LimitOffsetPagination):
         context["page_number"] = page_number
         context.update({"contacts_count": self.count, "offset": offset})
         context["contact_obj_list"] = contacts
-        context["countries"] = COUNTRIES
-        users = Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-            "id", "user__email"
-        )
-        context["users"] = users
+
+# Add users for filters and drop-down lists
+#         users = Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
+#             "id", "user__email"
+#         )
+#         context["users"] = users
+
+# # Add companies for filters
+#         companies = CompanyProfile.objects.filter(org=self.request.profile.org).values(
+#             "id", "name"
+#         )
+#         context["companies"] = companies
 
         return context
 
@@ -82,8 +100,52 @@ class ContactsListView(APIView, LimitOffsetPagination):
         tags=["contacts"], parameters=swagger_params1.contact_list_get_params
     )
     def get(self, request, *args, **kwargs):
-        context = self.get_context_data(**kwargs)
-        return Response(context)
+        """Getting a list of contacts with filtering by companies and other parameters"""
+
+        if not hasattr(request, 'profile') or not request.profile:
+            return Response(
+                {"error": True, "errors": "Profile not found"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if request.profile.role != "ADMIN" and not request.profile.is_admin:
+            if not request.profile.is_active:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have Permission to perform this action",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        if not request.profile.org:
+            return Response(
+                {"error": True, "errors": "Organization not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+      # Getting context data taking into account all filters
+            context = self.get_context_data(**kwargs)
+
+            #  Forming the response structure to match the rest of the API
+            return Response({
+                "error": False,
+                "data": context
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import traceback
+            print(f"Error getting contacts: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {"error": True, "errors": f"Error getting contacts: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+
+
 
     @extend_schema(
         tags=["contacts"],
