@@ -55,7 +55,9 @@ class LeadListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         queryset = (
-            self.model.objects.filter(organization=self.request.profile.org)  # Updated from org to organization
+            self.model.objects.filter(
+                organization=self.request.profile.org
+            )  # Updated from org to organization
             .exclude(status="converted")
             .select_related("created_by")
             .prefetch_related(
@@ -73,7 +75,9 @@ class LeadListView(APIView, LimitOffsetPagination):
                 # Name search removed as we no longer have first_name and last_name fields
                 pass
             if params.get("description"):
-                queryset = queryset.filter(description__icontains=params.get("description"))
+                queryset = queryset.filter(
+                    description__icontains=params.get("description")
+                )
             if params.get("lead_source"):
                 queryset = queryset.filter(lead_source=params.get("lead_source"))
             if params.getlist("assigned_to"):
@@ -173,7 +177,7 @@ class LeadListView(APIView, LimitOffsetPagination):
                     "notes": "Initial contact made via email, interested in our product suite",
                     "contact": "fe3e240f-0664-4288-868d-6b63511daa59",
                     "company": "ee3dddad-21ab-4b22-9ab4-076d3a28a0ac",
-                    "assigned_to": "7daf9e00-328c-47cd-af57-0e1fe8e43190"
+                    "assigned_to": "7daf9e00-328c-47cd-af57-0e1fe8e43190",
                 },
                 request_only=True,
             )
@@ -271,7 +275,11 @@ class LeadListView(APIView, LimitOffsetPagination):
                     status=status.HTTP_200_OK,
                 )
             return Response(
-                {"error": False, "message": "Lead Created Successfully"},
+                {
+                    "error": False,
+                    "message": "Lead Created Successfully",
+                    "id": str(lead_obj.id),
+                },
                 status=status.HTTP_200_OK,
             )
         return Response(
@@ -570,7 +578,11 @@ class LeadDetailView(APIView):
                     status=status.HTTP_200_OK,
                 )
             return Response(
-                {"error": False, "message": "Lead updated Successfully"},
+                {
+                    "error": False,
+                    "message": "Lead updated Successfully",
+                    "id": str(lead_obj.id),
+                },
                 status=status.HTTP_200_OK,
             )
         return Response(
@@ -745,7 +757,7 @@ class CreateLeadFromSite(APIView):
         if api_setting and params.get("description"):
             # user = User.objects.filter(is_admin=True, is_active=True).first()
             user = api_setting.created_by
-            
+
             # Create Contact first
             try:
                 # We need contact info from the form or use default values
@@ -759,7 +771,7 @@ class CreateLeadFromSite(APIView):
                     is_active=True,
                     org=api_setting.org,
                 )
-                
+
                 # Create Lead with the contact
                 lead = Lead.objects.create(
                     status="assigned",
@@ -772,7 +784,7 @@ class CreateLeadFromSite(APIView):
                 )
                 lead.assigned_to = user
                 lead.save()
-                
+
                 # Send Email to Assigned Users
                 site_address = request.scheme + "://" + request.META["HTTP_HOST"]
                 send_lead_assigned_emails.delay(lead.id, [user.id], site_address)
@@ -780,7 +792,11 @@ class CreateLeadFromSite(APIView):
                 pass
 
             return Response(
-                {"error": False, "message": "Lead Created sucessfully."},
+                {
+                    "error": False,
+                    "message": "Lead Created sucessfully.",
+                    "id": str(lead.id),
+                },
                 status=status.HTTP_200_OK,
             )
         return Response(
