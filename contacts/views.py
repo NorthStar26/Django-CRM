@@ -100,11 +100,11 @@ class ContactsListView(APIView, LimitOffsetPagination):
 #         )
 #         context["users"] = users
 
-# # Add companies for filters
-#         companies = CompanyProfile.objects.filter(org=self.request.profile.org).values(
-#             "id", "name"
-#         )
-#         context["companies"] = companies
+# Add companies for filters
+        companies = CompanyProfile.objects.filter(org=self.request.profile.org).values(
+            "id", "name"
+        )
+        context["companies"] = companies
 
         return context
 
