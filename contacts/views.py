@@ -26,6 +26,18 @@ from teams.models import Teams
 from companies.models import CompanyProfile
 from contacts.serializer import ContactBasicSerializer
 
+def format_serializer_errors(errors):
+    """
+    Преобразует ошибки сериализатора в строку для message.
+    """
+    messages = []
+    for field, errs in errors.items():
+        if isinstance(errs, (list, tuple)):
+            for err in errs:
+                messages.append(f"{field}: {err}")
+        else:
+            messages.append(f"{field}: {errs}")
+    return "; ".join(messages)
 class ContactsListView(APIView, LimitOffsetPagination):
     #authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
@@ -182,8 +194,14 @@ class ContactsListView(APIView, LimitOffsetPagination):
             )
 
         if not contact_serializer.is_valid():
+            error_details = {k: [str(e) for e in v] for k, v in contact_serializer.errors.items()}
+            error_message = format_serializer_errors(contact_serializer.errors)
             return Response(
-                {"error": True, "errors": contact_serializer.errors},
+                {
+                    "error": True,
+                    "message": error_message or "Validation error",
+                    "details": error_details
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -279,8 +297,14 @@ class ContactDetailView(APIView):
                 partial=True
             )
             if not contact_serializer.is_valid():
+                error_details = {k: [str(e) for e in v] for k, v in contact_serializer.errors.items()}
+                error_message = format_serializer_errors(contact_serializer.errors)
                 return Response(
-                    {"error": True, "errors": contact_serializer.errors},
+                    {
+                        "error": True,
+                        "message": error_message or "Validation error",
+                        "details": error_details
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             updated_contact = contact_serializer.save()
