@@ -98,6 +98,28 @@ class LeadCreateSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        # Convert 'org' to 'organization' if present
+        if "org" in validated_data:
+            validated_data["organization"] = validated_data.pop("org")
+
+        # Convert assigned_to UUID to Profile instance
+        if "assigned_to" in validated_data:
+            from common.models import Profile
+
+            assigned_to_id = validated_data.pop("assigned_to")
+            try:
+                profile = Profile.objects.get(
+                    id=assigned_to_id, org=self.request_obj.profile.org
+                )
+                validated_data["assigned_to"] = profile
+            except Profile.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"assigned_to": ["Invalid profile ID"]}
+                )
+
+        return super().update(instance, validated_data)
+
     # Removed validation methods for fields that no longer exist
 
     class Meta:

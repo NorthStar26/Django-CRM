@@ -188,12 +188,12 @@ class LeadListView(APIView, LimitOffsetPagination):
         ],
     )
     def post(self, request, *args, **kwargs):
-        print("test")
+        # Removed debug print statement
         data = request.data
         serializer = LeadCreateSerializer(data=data, request_obj=request)
         if serializer.is_valid():
             lead_obj = serializer.save(
-                created_by=request.profile.user, org=request.profile.org
+                created_by=request.profile.user, organization=request.profile.org
             )
 
             # Handle attachment_links if provided
@@ -212,11 +212,16 @@ class LeadListView(APIView, LimitOffsetPagination):
             #             tag = Tags.objects.create(name=t)
             #         lead_obj.tags.add(tag)
 
-            if data.get("contacts", None):
-                obj_contact = Contact.objects.filter(
-                    id__in=data.get("contacts"), org=request.profile.org
-                )
-                lead_obj.contacts.add(*obj_contact)
+            # Handle contact as a ForeignKey, not ManyToMany
+            if data.get("contact", None):
+                try:
+                    contact = Contact.objects.get(
+                        id=data.get("contact"), org=request.profile.org
+                    )
+                    lead_obj.contact = contact
+                    lead_obj.save()
+                except Contact.DoesNotExist:
+                    pass  # The serializer should have already validated this
 
             # Handle assigned_to as a single Profile object, not a queryset
             recipients = [lead_obj.assigned_to.id] if lead_obj.assigned_to else []
@@ -233,10 +238,11 @@ class LeadListView(APIView, LimitOffsetPagination):
                 attachment.attachment = request.FILES.get("lead_attachment")
                 attachment.save()
 
-            if data.get("teams", None):
-                teams_list = data.get("teams")
-                teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-                lead_obj.teams.add(*teams)
+            # Commented out teams-related code as we don't have teams in Lead model currently
+            # if data.get("teams", None):
+            #     teams_list = data.get("teams")
+            #     teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
+            #     lead_obj.teams.add(*teams)
 
             # Skip handling of assigned_to here as it's already set as a ForeignKey
             # The assigned_to is now directly set in serializer.save()
@@ -244,20 +250,12 @@ class LeadListView(APIView, LimitOffsetPagination):
             if data.get("status") == "converted":
                 account_object = Account.objects.create(
                     created_by=request.profile.user,
-                    name=lead_obj.account_name,
-                    email=lead_obj.email,
-                    phone=lead_obj.phone,
                     description=data.get("description"),
                     website=data.get("website"),
                     org=request.profile.org,
                 )
 
-                account_object.billing_address_line = lead_obj.address_line
-                account_object.billing_street = lead_obj.street
-                account_object.billing_city = lead_obj.city
-                account_object.billing_state = lead_obj.state
-                account_object.billing_postcode = lead_obj.postcode
-                account_object.billing_country = lead_obj.country
+                # Removed address field copying as Lead model no longer has these fields
                 comments = Comment.objects.filter(lead=self.lead_obj)
                 if comments.exists():
                     for comment in comments:
@@ -309,9 +307,11 @@ class LeadDetailView(APIView):
 
     def get_context_data(self, **kwargs):
         context = {}
-        user_assgn_list = [
-            assigned_to.id for assigned_to in self.lead_obj.assigned_to.all()
-        ]
+        # Handle assigned_to as a ForeignKey instead of ManyToMany
+        user_assgn_list = []
+        if self.lead_obj.assigned_to:
+            user_assgn_list.append(self.lead_obj.assigned_to.id)
+
         if self.request.profile.user == self.lead_obj.created_by:
             user_assgn_list.append(self.request.profile.user)
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
@@ -327,10 +327,11 @@ class LeadDetailView(APIView):
         comments = Comment.objects.filter(lead=self.lead_obj).order_by("-id")
         attachments = Attachments.objects.filter(lead=self.lead_obj).order_by("-id")
         assigned_data = []
-        for each in self.lead_obj.assigned_to.all():
+        # Handle assigned_to as a single object, not a queryset
+        if self.lead_obj.assigned_to:
             assigned_dict = {}
-            assigned_dict["id"] = each.id
-            assigned_dict["name"] = each.user.email
+            assigned_dict["id"] = self.lead_obj.assigned_to.id
+            assigned_dict["name"] = self.lead_obj.assigned_to.user.email
             assigned_data.append(assigned_dict)
 
         if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
@@ -342,7 +343,13 @@ class LeadDetailView(APIView):
         elif self.request.profile.user != self.lead_obj.created_by:
             users_mention = [{"username": self.lead_obj.created_by.username}]
         else:
-            users_mention = list(self.lead_obj.assigned_to.all().values("user__email"))
+            # Handle assigned_to as a single object
+            users_mention = []
+            if self.lead_obj.assigned_to:
+                users_mention.append(
+                    {"user__email": self.lead_obj.assigned_to.user.email}
+                )
+
         if self.request.profile.role == "ADMIN" or self.request.user.is_superuser:
             users = Profile.objects.filter(
                 is_active=True, org=self.request.profile.org
@@ -351,10 +358,11 @@ class LeadDetailView(APIView):
             users = Profile.objects.filter(
                 role="ADMIN", org=self.request.profile.org
             ).order_by("user__email")
-        user_assgn_list = [
-            assigned_to.id
-            for assigned_to in self.lead_obj.get_assigned_users_not_in_teams
-        ]
+
+        # Handle assigned_to as a ForeignKey field
+        user_assgn_list = []
+        if self.lead_obj.assigned_to:
+            user_assgn_list.append(self.lead_obj.assigned_to.id)
 
         if self.request.profile.user == self.lead_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
@@ -367,7 +375,9 @@ class LeadDetailView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        team_ids = [user.id for user in self.lead_obj.get_team_users]
+        # Comment out team-related code as we don't have teams in Lead model currently
+        # team_ids = [user.id for user in self.lead_obj.get_team_users]
+        team_ids = []  # Empty list since we're not using teams
         all_user_ids = [user.id for user in users]
         users_excluding_team_id = set(all_user_ids) - set(team_ids)
         users_excluding_team = Profile.objects.filter(id__in=users_excluding_team_id)
@@ -413,7 +423,7 @@ class LeadDetailView(APIView):
 
         context = {}
         self.lead_obj = Lead.objects.get(pk=pk)
-        if self.lead_obj.org != request.profile.org:
+        if self.lead_obj.organization != request.profile.org:
             return Response(
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -421,7 +431,7 @@ class LeadDetailView(APIView):
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
             if not (
                 (self.request.profile.user == self.lead_obj.created_by)
-                or (self.request.profile in self.lead_obj.assigned_to.all())
+                or (self.request.profile == self.lead_obj.assigned_to)
             ):
                 return Response(
                     {
@@ -470,7 +480,7 @@ class LeadDetailView(APIView):
     def put(self, request, pk, **kwargs):
         params = request.data
         self.lead_obj = self.get_object(pk)
-        if self.lead_obj.org != request.profile.org:
+        if self.lead_obj.organization != request.profile.org:
             return Response(
                 {
                     "error": True,
@@ -491,26 +501,29 @@ class LeadDetailView(APIView):
                 lead_obj.attachment_links = params.get("attachment_links")
                 lead_obj.save()
 
-            previous_assigned_to_users = list(
-                lead_obj.assigned_to.all().values_list("id", flat=True)
-            )
-            lead_obj.tags.clear()
-            if params.get("tags"):
-                tags = params.get("tags")
-                # for t in tags:
-                #     tag,_ = Tags.objects.get_or_create(name=t)
-                #     lead_obj.tags.add(tag)
-                for t in tags:
-                    tag = Tags.objects.filter(slug=t.lower())
-                    if tag.exists():
-                        tag = tag[0]
-                    else:
-                        tag = Tags.objects.create(name=t)
-                    lead_obj.tags.add(tag)
+            # Check if lead_obj.assigned_to is a Profile or ManyToMany
+            if hasattr(lead_obj.assigned_to, "all"):
+                previous_assigned_to_users = list(
+                    lead_obj.assigned_to.all().values_list("id", flat=True)
+                )
+            else:
+                # For ForeignKey, get a single ID if assigned_to exists
+                previous_assigned_to_users = (
+                    [lead_obj.assigned_to.id] if lead_obj.assigned_to else []
+                )
+            # Removed tags handling as Lead model doesn't have tags field anymore
 
-            assigned_to_list = list(
-                lead_obj.assigned_to.all().values_list("id", flat=True)
-            )
+            # Check if lead_obj.assigned_to is a Profile (ForeignKey) or QuerySet (ManyToMany)
+            if hasattr(lead_obj.assigned_to, "all"):
+                assigned_to_list = list(
+                    lead_obj.assigned_to.all().values_list("id", flat=True)
+                )
+            else:
+                # For ForeignKey, get a single ID if assigned_to exists
+                assigned_to_list = (
+                    [lead_obj.assigned_to.id] if lead_obj.assigned_to else []
+                )
+
             recipients = list(set(assigned_to_list) - set(previous_assigned_to_users))
             send_email_to_assigned_user.delay(
                 recipients,
@@ -524,44 +537,47 @@ class LeadDetailView(APIView):
                 attachment.attachment = request.FILES.get("lead_attachment")
                 attachment.save()
 
-            lead_obj.contacts.clear()
-            if params.get("contacts"):
-                obj_contact = Contact.objects.filter(
-                    id=params.get("contacts"), org=request.profile.org
-                )
-                lead_obj.contacts.add(obj_contact)
+            # Handle contact as a ForeignKey, not ManyToMany
+            if params.get("contact"):
+                try:
+                    contact = Contact.objects.get(
+                        id=params.get("contact"), org=request.profile.org
+                    )
+                    lead_obj.contact = contact
+                    lead_obj.save()
+                except Contact.DoesNotExist:
+                    pass  # The serializer should have already validated this
 
-            lead_obj.teams.clear()
-            if params.get("teams"):
-                teams_list = params.get("teams")
-                teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
-                lead_obj.teams.add(*teams)
+            # Commented out teams-related code as we don't have teams in Lead model currently
+            # lead_obj.teams.clear()
+            # if params.get("teams"):
+            #     teams_list = params.get("teams")
+            #     teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
+            #     lead_obj.teams.add(*teams)
 
-            lead_obj.assigned_to.clear()
+            # Handle assigned_to as a ForeignKey field
+            # No need to clear since it's not a ManyToMany field anymore
             if params.get("assigned_to"):
-                assinged_to_list = params.get("assigned_to")
-                profiles = Profile.objects.filter(
-                    id__in=assinged_to_list, org=request.profile.org
-                )
-                lead_obj.assigned_to.add(*profiles)
+                assigned_to_id = params.get("assigned_to")
+                try:
+                    # For single ID (ForeignKey)
+                    profile = Profile.objects.get(
+                        id=assigned_to_id, org=request.profile.org
+                    )
+                    lead_obj.assigned_to = profile
+                    lead_obj.save()
+                except Profile.DoesNotExist:
+                    pass  # The serializer should have already validated this
 
             if params.get("status") == "converted":
                 account_object = Account.objects.create(
                     created_by=request.profile.user,
-                    name=lead_obj.account_name,
-                    email=lead_obj.email,
-                    phone=lead_obj.phone,
                     description=params.get("description"),
                     website=params.get("website"),
                     lead=lead_obj,
                     org=request.profile.org,
                 )
-                account_object.billing_address_line = lead_obj.address_line
-                account_object.billing_street = lead_obj.street
-                account_object.billing_city = lead_obj.city
-                account_object.billing_state = lead_obj.state
-                account_object.billing_postcode = lead_obj.postcode
-                account_object.billing_country = lead_obj.country
+                # Removed address field copying as Lead model no longer has these fields
                 comments = Comment.objects.filter(lead=self.lead_obj)
                 if comments.exists():
                     for comment in comments:
@@ -617,7 +633,7 @@ class LeadDetailView(APIView):
             request.profile.role == "ADMIN"
             or request.user.is_superuser
             or request.profile.user == self.object.created_by
-        ) and self.object.org == request.profile.org:
+        ) and self.object.organization == request.profile.org:
             self.object.delete()
             return Response(
                 {"error": False, "message": "Lead deleted Successfully"},
