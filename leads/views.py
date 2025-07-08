@@ -175,6 +175,10 @@ class LeadListView(APIView, LimitOffsetPagination):
                     "status": "in process",
                     "lead_source": "email",
                     "notes": "Initial contact made via email, interested in our product suite",
+                    "attachment_links": [
+                        "https://example.com/files/doc1.pdf",
+                        "https://example.com/files/doc2.pdf",
+                    ],
                     "contact": "fe3e240f-0664-4288-868d-6b63511daa59",
                     "company": "ee3dddad-21ab-4b22-9ab4-076d3a28a0ac",
                     "assigned_to": "7daf9e00-328c-47cd-af57-0e1fe8e43190",
@@ -191,6 +195,12 @@ class LeadListView(APIView, LimitOffsetPagination):
             lead_obj = serializer.save(
                 created_by=request.profile.user, org=request.profile.org
             )
+
+            # Handle attachment_links if provided
+            if data.get("attachment_links"):
+                lead_obj.attachment_links = data.get("attachment_links")
+                lead_obj.save()
+
             # Removed tags handling as Lead model doesn't have tags field
             # if data.get("tags", None):
             #     tags = data.get("tags")
@@ -271,6 +281,7 @@ class LeadListView(APIView, LimitOffsetPagination):
                     {
                         "error": False,
                         "message": "Lead Converted to Account Successfully",
+                        "id": str(lead_obj.id),
                     },
                     status=status.HTTP_200_OK,
                 )
@@ -297,7 +308,6 @@ class LeadDetailView(APIView):
         return get_object_or_404(Lead, id=pk)
 
     def get_context_data(self, **kwargs):
-        params = self.request.query_params
         context = {}
         user_assgn_list = [
             assigned_to.id for assigned_to in self.lead_obj.assigned_to.all()
@@ -475,6 +485,12 @@ class LeadDetailView(APIView):
         )
         if serializer.is_valid():
             lead_obj = serializer.save()
+
+            # Handle attachment_links if provided
+            if params.get("attachment_links"):
+                lead_obj.attachment_links = params.get("attachment_links")
+                lead_obj.save()
+
             previous_assigned_to_users = list(
                 lead_obj.assigned_to.all().values_list("id", flat=True)
             )
@@ -817,7 +833,7 @@ class CompaniesView(APIView):
                 {"error": False, "data": serializer.data},
                 status=status.HTTP_200_OK,
             )
-        except Exception as e:
+        except Exception:
             return Response(
                 {"error": True, "message": "Organization is missing"},
                 status=status.HTTP_400_BAD_REQUEST,

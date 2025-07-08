@@ -28,6 +28,12 @@ class Lead(BaseModel):
         _("Source of Lead"), max_length=255, blank=True, null=True, choices=LEAD_SOURCE
     )
     notes = models.TextField(blank=True, null=True)
+    attachment_links = models.JSONField(
+        _("Attachment Links"),
+        blank=True,
+        null=True,
+        help_text="Store links to attachments as a JSON array",
+    )
 
     # Relationships
     assigned_to = models.ForeignKey(

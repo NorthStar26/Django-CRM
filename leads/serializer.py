@@ -60,6 +60,7 @@ class LeadSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "organization",
+            "attachment_links",
             "lead_attachment",
             "lead_comments",
         )
@@ -113,6 +114,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
             "contact",
             "company",
             "organization",
+            "attachment_links",
             # "lead_attachment",
         )
 
@@ -137,6 +139,9 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
     notes = serializers.CharField(
         help_text="Additional notes about the lead", required=False
     )
+    attachment_links = serializers.JSONField(
+        help_text="JSON array of attachment links", required=False
+    )
     assigned_to = serializers.UUIDField(
         help_text="UUID of the Profile to assign this lead to"
     )
@@ -157,6 +162,7 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
             "status",
             "lead_source",
             "notes",
+            "attachment_links",
             "assigned_to",
             "contact",
             "company",
