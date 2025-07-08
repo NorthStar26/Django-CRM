@@ -14,8 +14,13 @@ from common.base import BaseModel
 
 
 class Tags(BaseModel):
-    name = models.CharField(max_length=20)
-    slug = models.CharField(max_length=20, unique=True, blank=True)
+    #a max_length constraint to prevent overly long tags
+    name = models.CharField(max_length=50, unique=True)  # Increased from 20
+     # SlugField is more appropriate than CharField for slugs
+    slug = models.SlugField(max_length=50, unique=True, blank=True)
+
+    # a color field for UI differentiation
+    color = models.CharField(max_length=7, default='#000000')  # Hex color
 
 
     class Meta:
@@ -37,9 +42,13 @@ class Account(BaseModel):
 
     ACCOUNT_STATUS_CHOICE = (("open", "Open"), ("close", "Close"))
 
-    name = models.CharField(pgettext_lazy("Name of Account", "Name"), max_length=64)
+     # help_text for fields that might need clarification
+    name = models.CharField(pgettext_lazy("Name of Account", "Name"), max_length=64,
+                            help_text=_("The official name of the account/organization"))
     email = models.EmailField()
-    phone = PhoneNumberField(null=True)
+
+    # Make explicitly blankable
+    phone = PhoneNumberField(null=True, blank=True, help_text=_("Primary contact number for the account"))
     industry = models.CharField(
         _("Industry Type"), max_length=255, choices=INDCHOICES, blank=True, null=True
     )
