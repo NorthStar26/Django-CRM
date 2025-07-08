@@ -13,7 +13,7 @@ class CompanySwaggerCreateSerializer(serializers.ModelSerializer):
         fields = [
             'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country'
+            'billing_postcode', 'billing_country', 'billing_state'
         ]
 
 
@@ -22,7 +22,7 @@ class CompanySwaggerListSerializer(serializers.ModelSerializer):
         model = CompanyProfile
         fields = [
             'id', 'name', 'email', 'phone', 'website', 'industry',
-            'billing_city', 'billing_country', 'created_at'
+            'billing_city', 'billing_country', 'billing_state', 'created_at'
         ]
 
 
@@ -35,7 +35,7 @@ class CompanyListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country',
+            'billing_postcode', 'billing_country', 'billing_state',
             'created_by', 'organization', 'created_at', 'updated_at'
         ]
 
@@ -51,7 +51,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country',
+            'billing_postcode', 'billing_country', 'billing_state',
             'created_by', 'updated_by', 'organization',
             'created_at', 'updated_at'
         ]
@@ -63,7 +63,7 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country'
+            'billing_postcode', 'billing_country', 'billing_state'
         ]
     def update(self, instance, validated_data):
         request = self.context.get('request')
@@ -126,7 +126,7 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
                     org=org
                 ).exists():
                     raise serializers.ValidationError({
-                        'email': [_("Company with this email already exists in your organization")]
+                        'email': [_("Another company with this email already exists in your organization")]
                     })
             if 'website' in validated_data and validated_data['website']:
                 if CompanyProfile.objects.filter(
@@ -134,7 +134,7 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
                     org=org
                 ).exists():
                     raise serializers.ValidationError({
-                        'website': [_("Company with this website already exists in your organization")]
+                        'website': [_("Another company with this website already exists in your organization")]
                     })
 
         return super().create(validated_data)
