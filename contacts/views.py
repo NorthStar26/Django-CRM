@@ -105,6 +105,15 @@ class ContactsListView(APIView, LimitOffsetPagination):
             "id", "name"
         )
         context["companies"] = companies
+            # Add unique job titles for filters
+        job_titles = (
+            self.model.objects.filter(org=self.request.profile.org)
+            .exclude(title__isnull=True)
+            .exclude(title__exact="")
+            .values_list("title", flat=True)
+            .distinct()
+        )
+        context["job_titles"] = list(job_titles)
 
         return context
 
