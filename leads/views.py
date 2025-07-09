@@ -1,7 +1,7 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.http import Http404
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
@@ -23,8 +23,6 @@ from .models import Lead
 from common.utils import COUNTRIES, INDCHOICES, LEAD_SOURCE, LEAD_STATUS
 from contacts.models import Contact
 from leads import swagger_params1
-from leads.forms import LeadListForm
-from leads.models import Lead
 from companies.models import CompanyProfile
 from leads.serializer import (
     CompanySerializer,
@@ -37,6 +35,7 @@ from leads.serializer import (
     LeadCommentEditSwaggerSerializer,
     CreateLeadFromSiteSwaggerSerializer,
     LeadUploadSwaggerSerializer,
+    AttachmentCreateSwaggerSerializer,
 )
 from common.models import User
 from leads.tasks import (
@@ -742,6 +741,72 @@ class LeadAttachmentView(APIView):
     model = Attachments
     # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Leads"],
+        parameters=swagger_params1.organization_params,
+        request=AttachmentCreateSwaggerSerializer,
+    )
+    def post(self, request, format=None):
+        """
+        Create an attachment for a lead using data from Cloudinary
+        """
+        lead_id = request.data.get("lead_id")
+        file_name = request.data.get("file_name")
+        file_type = request.data.get("file_type", "")
+        file_url = request.data.get("file_url")
+
+        if not (lead_id and file_name and file_url):
+            return Response(
+                {"error": True, "errors": "Missing required data"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            lead = Lead.objects.get(id=lead_id)
+
+            # Check permissions
+            if lead.organization != request.profile.org:
+                return Response(
+                    {"error": True, "errors": "You don't have permission for this lead"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            attachment = Attachments()
+            attachment.created_by = request.profile.user
+            attachment.file_name = file_name
+            attachment.lead = lead
+
+            # Save the Cloudinary URL instead of a file upload
+            attachment.attachment = file_url
+            attachment.save()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Attachment created successfully",
+                    "attachment_id": str(attachment.id),
+                    "attachment": file_name,
+                    "attachment_url": file_url,
+                    "attachment_display": file_type,
+                    "created_by": request.profile.user.email,
+                    "created_on": attachment.created_at,
+                    "file_type": file_type.split('/') if '/' in file_type else [file_type, ''],
+                    "download_url": file_url,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Lead.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Lead not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "errors": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(tags=["Leads"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):

@@ -19,6 +19,22 @@ class TagsSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "slug")
 
 
+class AttachmentCreateSwaggerSerializer(serializers.Serializer):
+    lead_id = serializers.UUIDField(
+        help_text="UUID of the Lead to attach this file to"
+    )
+    file_name = serializers.CharField(
+        help_text="Name of the file"
+    )
+    file_type = serializers.CharField(
+        help_text="MIME type of the file (e.g., image/jpeg, application/pdf)",
+        required=False
+    )
+    file_url = serializers.URLField(
+        help_text="URL of the file (from Cloudinary)"
+    )
+
+
 class CompanySwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyProfile
