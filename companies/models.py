@@ -132,6 +132,18 @@ class CompanyProfile(BaseModel):
         blank=True,
         null=True
     )
+    billing_state = models.CharField(
+        _("Billing State/Province"),
+        max_length=100,
+        blank=True,
+        null=True,
+        validators=[
+            RegexValidator(
+                regex=r'^[a-zA-Z\s\-\'\.]+$',
+                message='State/Province name can only contain letters, spaces, hyphens, apostrophes, and dots'
+            )
+        ]
+    )
 
  # Control system
     org = models.ForeignKey(

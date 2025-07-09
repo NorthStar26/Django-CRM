@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 
 from common.serializer import (
@@ -10,6 +11,7 @@ from companies.models import CompanyProfile
 from companies.serializer import CompanyListSerializer
 from contacts.models import Contact
 from teams.serializer import TeamsSerializer
+from common.utils import COUNTRIES
 
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -23,14 +25,21 @@ class ContactSerializer(serializers.ModelSerializer):
     date_of_birth = serializers.DateField()
     org = OrganizationSerializer()
     country = serializers.SerializerMethodField()
+    country_name = serializers.SerializerMethodField()  # Добавлено
     company = CompanyListSerializer(read_only=True)
     created_by = ProfileSerializer(read_only=True)
-
 
     def get_country(self, obj):
         return obj.get_country_display()
 
+    def get_country_name(self, obj):  # Добавлен метод
+        if not obj.country:
+            return None
 
+        for code, name in COUNTRIES:
+            if code == obj.country:
+                return name
+        return None
 
     class Meta:
         model = Contact
@@ -48,6 +57,7 @@ class ContactSerializer(serializers.ModelSerializer):
             "secondary_number",
             "department",
             "country",
+            'country_name',
             "language",
             "do_not_call",
             "address",
@@ -70,17 +80,34 @@ class ContactSerializer(serializers.ModelSerializer):
             "company",
         )
 
-class ContactBasicSerializer(serializers.ModelSerializer):
 
+class ContactBasicSerializer(serializers.ModelSerializer):
     company = CompanyListSerializer(read_only=True)
     salutation_display = serializers.SerializerMethodField()
     language_display = serializers.SerializerMethodField()
+    country_name = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
 
     def get_salutation_display(self, obj):
         return obj.get_salutation_display() if obj.salutation else None
 
     def get_language_display(self, obj):
         return obj.get_language_display() if obj.language else None
+
+    def get_country_name(self, obj):
+        if not obj.country:
+            return None
+
+        for code, name in COUNTRIES:
+            if code == obj.country:
+                return name
+        return None
+
+    def get_company_name(self, obj):
+        if obj.company:
+            return obj.company.name
+        return None
+
     class Meta:
         model = Contact
         fields = (
@@ -97,8 +124,19 @@ class ContactBasicSerializer(serializers.ModelSerializer):
             "do_not_call",
             "description",
             "company",
+            'company_name',
+            'country',
+            'country_name',
         )
+
+
 class CreateContactSerializer(serializers.ModelSerializer):
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=CompanyProfile.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
         super().__init__(*args, **kwargs)
@@ -107,6 +145,7 @@ class CreateContactSerializer(serializers.ModelSerializer):
             self.fields['company'].queryset = CompanyProfile.objects.filter(
                 org=self.org
             )
+
     def create(self, validated_data):
         request = self.context.get('request')
         if not request:
@@ -159,6 +198,7 @@ class CreateContactSerializer(serializers.ModelSerializer):
                     "Contact with this email already exists"
                 )
         return primary_email
+
     def validate_company(self, company):
         if company:
             org = getattr(self, 'org', None)
@@ -168,15 +208,9 @@ class CreateContactSerializer(serializers.ModelSerializer):
                 )
         return company
 
-    company = serializers.PrimaryKeyRelatedField(
-        queryset=CompanyProfile.objects.all(),
-        required=False,
-        allow_null=True
-    )
     class Meta:
         model = Contact
         fields = (
-
             "salutation",        #  Popup field for selecting a salutation
             "first_name",        #
             "last_name",         #
@@ -186,14 +220,14 @@ class CreateContactSerializer(serializers.ModelSerializer):
             "language",          # Popup field for selecting a language
             "do_not_call",       # Checkbox
             "description",
-            "company",        #  Popup field for selecting a company
+            "company",           #  Popup field for selecting a company
         )
-
 
 
 class ContactDetailEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
     contact_attachment = serializers.FileField()
+
 
 class ContactCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()

@@ -15,6 +15,7 @@ SALUTATION_CHOICES = [
 ]
 LANGUAGE_CHOICES = [
     ('en', 'English'),
+    ('du', 'Dutch'),
     ('es', 'Spanish'),
     ('fr', 'French'),
     ('de', 'German'),
