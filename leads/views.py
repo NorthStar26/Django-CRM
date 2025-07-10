@@ -73,17 +73,23 @@ class LeadListView(APIView, LimitOffsetPagination):
             # ✅ Enhanced filters (this is what you want to add)
         if search := params.get("search"):
             queryset = queryset.select_related("contact", "company").filter(
-                Q(description__icontains=search)
+                Q(lead_title__icontains=search)  # Add search by lead_title
+                | Q(description__icontains=search)
                 | Q(lead_source__icontains=search)
                 | Q(status__icontains=search)
                 | Q(contact__first_name__icontains=search)
+                | Q(contact__last_name__icontains=search)  # Add search by contact's last name
+                | Q(contact__primary_email__icontains=search)  # Add search by contact's primary email
                 | Q(company__name__icontains=search)
             )
 
         if params:
             if params.get("name"):
-                # Name search removed as we no longer have first_name and last_name fields
-                pass
+                # Update name search to use lead_title field
+                queryset = queryset.filter(lead_title__icontains=params.get("name"))
+            if params.get("lead_title"):
+                # Add explicit lead_title filter
+                queryset = queryset.filter(lead_title__icontains=params.get("lead_title"))
             if params.get("description"):
                 queryset = queryset.filter(
                     description__icontains=params.get("description")
@@ -574,7 +580,9 @@ class LeadDetailView(APIView):
             if params.get("status") == "converted":
                 account_object = Account.objects.create(
                     created_by=request.profile.user,
-                    name=params.get("lead_title", ""),  # Use lead_title as account name if available
+                    name=params.get(
+                        "lead_title", ""
+                    ),  # Use lead_title as account name if available
                     description=params.get("description"),
                     website=params.get("website"),
                     lead=lead_obj,

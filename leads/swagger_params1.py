@@ -21,4 +21,3 @@ lead_list_get_params = [
         enum=["new", "qualified", "disqualified", "recycled"],
     ),
 ]
-

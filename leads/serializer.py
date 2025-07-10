@@ -44,33 +44,34 @@ class CompanySerializer(serializers.ModelSerializer):
 class LeadListSerializer(serializers.ModelSerializer):
     # Use lead_title if available, otherwise use description as a fallback
     lead_name = serializers.SerializerMethodField()
-    contact_name = serializers.CharField(source='contact.first_name', read_only=True)
-    company_name = serializers.CharField(source='company.name', read_only=True)
-    assigned_to_email = serializers.CharField(source='assigned_to.user.email', read_only=True)
+    contact_name = serializers.CharField(source="contact.first_name", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    assigned_to_email = serializers.CharField(
+        source="assigned_to.user.email", read_only=True
+    )
     created_date = serializers.SerializerMethodField()
-    
+
     def get_lead_name(self, obj):
         return obj.lead_title if obj.lead_title else obj.description
 
     class Meta:
         model = Lead
         fields = (
-            'id',
-            'lead_title',  # Added the direct lead_title field
-            'lead_name',   # Keep the existing lead_name for backward compatibility
-            'contact_name',
-            'company_name',
-            'lead_source', 
-            'status',
-            'created_date',
-            'assigned_to_email',
+            "id",
+            "lead_title",  # Added the direct lead_title field
+            "lead_name",  # Keep the existing lead_name for backward compatibility
+            "contact_name",
+            "company_name",
+            "lead_source",
+            "status",
+            "created_date",
+            "assigned_to_email",
         )
 
     def get_created_date(self, obj):
         # Format: "March 12, 2023,"
         return obj.created_at.strftime("%B %d, %Y,") if obj.created_at else None
-    
-    
+
 
 class LeadSerializer(serializers.ModelSerializer):
     contact = ContactSerializer(read_only=True)
@@ -109,7 +110,9 @@ class LeadSerializer(serializers.ModelSerializer):
 
 
 class LeadCreateSerializer(serializers.ModelSerializer):
-    lead_title = serializers.CharField(required=False, allow_blank=True, max_length=255)  # Optional lead title
+    lead_title = serializers.CharField(
+        required=False, allow_blank=True, max_length=255
+    )  # Optional lead title
     probability = serializers.IntegerField(max_value=100)
     assigned_to = serializers.UUIDField(required=True)  # Make assigned_to required
     contact = serializers.UUIDField(required=True)  # Make contact required
@@ -243,9 +246,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
 
 
 class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
-    lead_title = serializers.CharField(
-        help_text="Title of the lead", required=False
-    )
+    lead_title = serializers.CharField(help_text="Title of the lead", required=False)
     description = serializers.CharField(
         help_text="Description of the lead", required=True
     )
