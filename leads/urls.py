@@ -1,7 +1,6 @@
 from django.urls import path
 
 from leads import views
-from .import views
 
 app_name = "api_leads"
 
@@ -19,6 +18,7 @@ urlpatterns = [
 
     path("comment/<str:pk>/", views.LeadCommentView.as_view()),
     path("attachment/<str:pk>/", views.LeadAttachmentView.as_view()),
+    path("attachment/", views.LeadAttachmentView.as_view()),
 
     path("", views.LeadListView.as_view()),
     path("<str:pk>/", views.LeadDetailView.as_view()),

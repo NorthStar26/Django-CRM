@@ -55,6 +55,19 @@ class CommentSerializer(serializers.ModelSerializer):
 
 
 class LeadCommentSerializer(serializers.ModelSerializer):
+    commented_by_user = serializers.SerializerMethodField()
+
+    def get_commented_by_user(self, obj):
+        if obj.commented_by and obj.commented_by.user:
+            return {
+                "id": obj.commented_by.id,
+                "email": obj.commented_by.user.email,
+                "first_name": obj.commented_by.user.first_name,
+                "last_name": obj.commented_by.user.last_name,
+                "profile_pic": obj.commented_by.user.profile_pic,
+            }
+        return None
+
     class Meta:
         model = Comment
         fields = (
@@ -62,6 +75,7 @@ class LeadCommentSerializer(serializers.ModelSerializer):
             "comment",
             "commented_on",
             "commented_by",
+            "commented_by_user",
             "lead",
         )
 
