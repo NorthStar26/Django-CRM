@@ -189,6 +189,20 @@ class LeadListView(APIView, LimitOffsetPagination):
     def post(self, request, *args, **kwargs):
         # Removed debug print statement
         data = request.data
+
+        # Check for required fields
+        required_fields = ["contact", "company", "description", "status", "assigned_to"]
+        missing_fields = [field for field in required_fields if not data.get(field)]
+
+        if missing_fields:
+            return Response(
+                {
+                    "error": True,
+                    "errors": f"Missing required fields: {', '.join(missing_fields)}",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = LeadCreateSerializer(data=data, request_obj=request)
         if serializer.is_valid():
             lead_obj = serializer.save(
@@ -768,7 +782,10 @@ class LeadAttachmentView(APIView):
             # Check permissions
             if lead.organization != request.profile.org:
                 return Response(
-                    {"error": True, "errors": "You don't have permission for this lead"},
+                    {
+                        "error": True,
+                        "errors": "You don't have permission for this lead",
+                    },
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -791,7 +808,9 @@ class LeadAttachmentView(APIView):
                     "attachment_display": file_type,
                     "created_by": request.profile.user.email,
                     "created_on": attachment.created_at,
-                    "file_type": file_type.split('/') if '/' in file_type else [file_type, ''],
+                    "file_type": file_type.split("/")
+                    if "/" in file_type
+                    else [file_type, ""],
                     "download_url": file_url,
                 },
                 status=status.HTTP_201_CREATED,

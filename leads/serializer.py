@@ -20,19 +20,13 @@ class TagsSerializer(serializers.ModelSerializer):
 
 
 class AttachmentCreateSwaggerSerializer(serializers.Serializer):
-    lead_id = serializers.UUIDField(
-        help_text="UUID of the Lead to attach this file to"
-    )
-    file_name = serializers.CharField(
-        help_text="Name of the file"
-    )
+    lead_id = serializers.UUIDField(help_text="UUID of the Lead to attach this file to")
+    file_name = serializers.CharField(help_text="Name of the file")
     file_type = serializers.CharField(
         help_text="MIME type of the file (e.g., image/jpeg, application/pdf)",
-        required=False
+        required=False,
     )
-    file_url = serializers.URLField(
-        help_text="URL of the file (from Cloudinary)"
-    )
+    file_url = serializers.URLField(help_text="URL of the file (from Cloudinary)")
 
 
 class CompanySwaggerSerializer(serializers.ModelSerializer):
@@ -84,7 +78,11 @@ class LeadSerializer(serializers.ModelSerializer):
 
 class LeadCreateSerializer(serializers.ModelSerializer):
     probability = serializers.IntegerField(max_value=100)
-    assigned_to = serializers.UUIDField()  # Accept UUID for assigned_to
+    assigned_to = serializers.UUIDField(required=True)  # Make assigned_to required
+    contact = serializers.UUIDField(required=True)  # Make contact required
+    company = serializers.UUIDField(required=True)  # Make company required
+    description = serializers.CharField(required=True)  # Make description required
+    status = serializers.CharField(required=True)  # Make status required
 
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
@@ -112,6 +110,28 @@ class LeadCreateSerializer(serializers.ModelSerializer):
                     {"assigned_to": ["Invalid profile ID"]}
                 )
 
+        # Convert contact UUID to Contact instance
+        if "contact" in validated_data:
+            from contacts.models import Contact
+
+            contact_id = validated_data.pop("contact")
+            try:
+                contact = Contact.objects.get(id=contact_id)
+                validated_data["contact"] = contact
+            except Contact.DoesNotExist:
+                raise serializers.ValidationError({"contact": ["Invalid contact ID"]})
+
+        # Convert company UUID to Company instance
+        if "company" in validated_data:
+            from companies.models import CompanyProfile
+
+            company_id = validated_data.pop("company")
+            try:
+                company = CompanyProfile.objects.get(id=company_id)
+                validated_data["company"] = company
+            except CompanyProfile.DoesNotExist:
+                raise serializers.ValidationError({"company": ["Invalid company ID"]})
+
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
@@ -134,7 +154,38 @@ class LeadCreateSerializer(serializers.ModelSerializer):
                     {"assigned_to": ["Invalid profile ID"]}
                 )
 
+        # Convert contact UUID to Contact instance
+        if "contact" in validated_data:
+            from contacts.models import Contact
+
+            contact_id = validated_data.pop("contact")
+            try:
+                contact = Contact.objects.get(id=contact_id)
+                validated_data["contact"] = contact
+            except Contact.DoesNotExist:
+                raise serializers.ValidationError({"contact": ["Invalid contact ID"]})
+
+        # Convert company UUID to Company instance
+        if "company" in validated_data:
+            from companies.models import CompanyProfile
+
+            company_id = validated_data.pop("company")
+            try:
+                company = CompanyProfile.objects.get(id=company_id)
+                validated_data["company"] = company
+            except CompanyProfile.DoesNotExist:
+                raise serializers.ValidationError({"company": ["Invalid company ID"]})
+
         return super().update(instance, validated_data)
+
+    def validate(self, data):
+        """
+        Validate that essential fields are provided.
+        """
+        # The required fields are already handled by required=True attributes
+        # The existence of Contact, Company, and Profile instances is checked in create/update methods
+
+        return data
 
     # Removed validation methods for fields that no longer exist
 
@@ -158,21 +209,28 @@ class LeadCreateSerializer(serializers.ModelSerializer):
 
 
 class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
-    description = serializers.CharField(help_text="Description of the lead")
+    description = serializers.CharField(
+        help_text="Description of the lead", required=True
+    )
     link = serializers.CharField(
         help_text="Related link (e.g., meeting notes, website)", required=False
     )
     amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, help_text="Potential deal amount"
+        max_digits=12,
+        decimal_places=2,
+        help_text="Potential deal amount",
+        required=False,
     )
     probability = serializers.IntegerField(
         help_text="Probability of conversion (0-100)", min_value=0, max_value=100
     )
     status = serializers.CharField(
-        help_text="Status of the lead (new, qualified, disqualified, recycled)"
+        help_text="Status of the lead (new, qualified, disqualified, recycled)",
+        required=True,
     )
     lead_source = serializers.CharField(
-        help_text="Source of the lead (call, email, existing customer, partner, public relations, campaign, website, other)"
+        help_text="Source of the lead (call, email, existing customer, partner, public relations, campaign, website, other)",
+        required=False,
     )
     notes = serializers.CharField(
         help_text="Additional notes about the lead", required=False
@@ -181,13 +239,13 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
         help_text="JSON array of attachment links", required=False
     )
     assigned_to = serializers.UUIDField(
-        help_text="UUID of the Profile to assign this lead to"
+        help_text="UUID of the Profile to assign this lead to", required=True
     )
     contact = serializers.UUIDField(
-        help_text="UUID of the Contact associated with this lead"
+        help_text="UUID of the Contact associated with this lead", required=True
     )
     company = serializers.UUIDField(
-        help_text="UUID of the Company associated with this lead"
+        help_text="UUID of the Company associated with this lead", required=True
     )
 
     class Meta:
