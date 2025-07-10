@@ -41,6 +41,33 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ("id", "name", "email", "phone", "website")
 
 
+class LeadListSerializer(serializers.ModelSerializer):
+    # Map "Lead Name" to the existing 'description' field
+    lead_name = serializers.CharField(source='description', read_only=True)
+    contact_name = serializers.CharField(source='contact.first_name', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    assigned_to_email = serializers.CharField(source='assigned_to.user.email', read_only=True)
+    created_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lead
+        fields = (
+            'id',
+            'lead_name',  # Now directly maps to description
+            'contact_name',
+            'company_name',
+            'lead_source', 
+            'status',
+            'created_date',
+            'assigned_to_email',
+        )
+
+    def get_created_date(self, obj):
+        # Format: "March 12, 2023,"
+        return obj.created_at.strftime("%B %d, %Y,") if obj.created_at else None
+    
+    
+
 class LeadSerializer(serializers.ModelSerializer):
     contact = ContactSerializer(read_only=True)
     assigned_to = ProfileSerializer(read_only=True)
