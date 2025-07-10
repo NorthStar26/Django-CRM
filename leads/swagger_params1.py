@@ -12,6 +12,7 @@ organization_params = [
 lead_list_get_params = [
     organization_params_in_header,
     OpenApiParameter("search", OpenApiTypes.STR, OpenApiParameter.QUERY),
+    OpenApiParameter("lead_title", OpenApiTypes.STR, OpenApiParameter.QUERY),
     OpenApiParameter("lead_source", OpenApiTypes.STR, OpenApiParameter.QUERY),
     OpenApiParameter(
         "status",

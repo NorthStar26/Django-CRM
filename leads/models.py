@@ -15,6 +15,7 @@ from contacts.models import Contact
 
 
 class Lead(BaseModel):
+    lead_title = models.CharField(_("Title"), max_length=255, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     link = models.CharField(_("Link"), max_length=255, blank=True, null=True)
     amount = models.DecimalField(
