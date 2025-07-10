@@ -169,7 +169,7 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
         help_text="Probability of conversion (0-100)", min_value=0, max_value=100
     )
     status = serializers.CharField(
-        help_text="Status of the lead (assigned, in process, converted, recycled, closed)"
+        help_text="Status of the lead (new, qualified, disqualified, recycled)"
     )
     lead_source = serializers.CharField(
         help_text="Source of the lead (call, email, existing customer, partner, public relations, campaign, website, other)"

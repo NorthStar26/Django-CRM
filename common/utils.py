@@ -6,15 +6,17 @@ from django.http import HttpResponse
 from rest_framework import status
 import json
 
+
 def ratelimit_error_handler(request, exception=None):
     """Return 429 instead of 403"""
-    print("RATELIMIT_ERROR_HANDLER FUNCTION CALLED!")  
+    print("RATELIMIT_ERROR_HANDLER FUNCTION CALLED!")
     print(f"Параметры: request={request}, exception={exception}")
     return HttpResponse(
         json.dumps({"detail": "Too many login attempts. Please try again later."}),
         content_type="application/json",
-        status=status.HTTP_429_TOO_MANY_REQUESTS
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
+
 
 def jwt_payload_handler(user):
     """Custom payload handler
@@ -85,11 +87,10 @@ ROLES = (
 )
 
 LEAD_STATUS = (
-    ("assigned", "Assigned"),
-    ("in process", "In Process"),
-    ("converted", "Converted"),
+    ("new", "New"),
+    ("qualified", "Qualified"),
+    ("disqualified", "Disqualified"),
     ("recycled", "Recycled"),
-    ("closed", "Closed"),
 )
 
 

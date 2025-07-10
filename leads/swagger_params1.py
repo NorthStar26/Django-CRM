@@ -18,7 +18,7 @@ lead_list_get_params = [
         "status",
         OpenApiTypes.STR,
         OpenApiParameter.QUERY,
-        enum=["assigned", "in process", "converted", "recycled", "closed"],
+        enum=["new", "qualified", "disqualified", "recycled"],
     ),
     OpenApiParameter("tags", OpenApiTypes.STR, OpenApiParameter.QUERY),
 ]
