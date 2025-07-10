@@ -37,6 +37,7 @@ from leads.serializer import (
     LeadCommentEditSwaggerSerializer,
     CreateLeadFromSiteSwaggerSerializer,
     LeadUploadSwaggerSerializer,
+    LeadListSerializer,
 )
 from common.models import User
 from leads.tasks import (
@@ -57,7 +58,7 @@ class LeadListView(APIView, LimitOffsetPagination):
         queryset = (
             self.model.objects.filter(organization=self.request.profile.org)  # Updated from org to organization
             .exclude(status="converted")
-            .select_related("created_by")
+            .select_related("created_by", "contact", "company") 
             .prefetch_related(
                 "assigned_to",
             )
@@ -67,6 +68,17 @@ class LeadListView(APIView, LimitOffsetPagination):
                 Q(assigned_to__in=[self.request.profile])
                 | Q(created_by=self.request.profile.user)
             )
+
+            # ✅ Enhanced filters (this is what you want to add)
+        if search := params.get("search"):
+            queryset = queryset.select_related("contact", "company").filter(
+                Q(description__icontains=search) |
+                Q(lead_source__icontains=search) |
+                Q(status__icontains=search) |
+                Q(contact__first_name__icontains=search) |
+                Q(company__name__icontains=search)
+            )
+
 
         if params:
             if params.get("name"):
@@ -94,7 +106,7 @@ class LeadListView(APIView, LimitOffsetPagination):
         results_leads_open = self.paginate_queryset(
             queryset_open.distinct(), self.request, view=self
         )
-        open_leads = LeadSerializer(results_leads_open, many=True).data
+        open_leads = LeadListSerializer(results_leads_open, many=True).data
         if results_leads_open:
             offset = queryset_open.filter(id__gte=results_leads_open[-1].id).count()
             if offset == queryset_open.count():
@@ -114,7 +126,7 @@ class LeadListView(APIView, LimitOffsetPagination):
         results_leads_close = self.paginate_queryset(
             queryset_close.distinct(), self.request, view=self
         )
-        close_leads = LeadSerializer(results_leads_close, many=True).data
+        close_leads = LeadListSerializer(results_leads_close, many=True).data
         if results_leads_close:
             offset = queryset_close.filter(id__gte=results_leads_close[-1].id).count()
             if offset == queryset_close.count():
