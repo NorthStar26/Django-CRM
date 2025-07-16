@@ -34,7 +34,9 @@ urlpatterns = [
         name="healthz",
     ),
     path("api/", include("common.app_urls", namespace="common_urls")),
-    path("api/companies/", include("companies.urls")),  # ✅ Добавить прямой маршрут
+    path("api/companies/", include("companies.urls")),
+    path("api/contacts/", include("contacts.urls")),
+
     # path("api/leads/", include("leads.urls")),
     path(
         "logout/", views.LogoutView.as_view(), {"next_page": "/login/"}, name="logout"
