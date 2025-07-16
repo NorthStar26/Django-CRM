@@ -122,6 +122,7 @@ class ContactBasicSerializer(serializers.ModelSerializer):
             "language",
             "language_display",    # (English, Spanish, etc.)
             "do_not_call",
+            "department",
             "description",
             "company",
             'company_name',
@@ -207,6 +208,12 @@ class CreateContactSerializer(serializers.ModelSerializer):
                     "Company does not belong to your organization"
                 )
         return company
+    def validate_department(self, department):
+        if department and len(department) > 255:
+            raise serializers.ValidationError(
+                "Department name is too long (maximum is 255 characters)"
+            )
+        return department
 
     class Meta:
         model = Contact
@@ -221,6 +228,7 @@ class CreateContactSerializer(serializers.ModelSerializer):
             "do_not_call",       # Checkbox
             "description",
             "company",           #  Popup field for selecting a company
+            "department",        #  Text field for department
         )
 
 

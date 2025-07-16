@@ -28,7 +28,7 @@ from contacts.serializer import ContactBasicSerializer
 
 def format_serializer_errors(errors):
     """
-    Преобразует ошибки сериализатора в строку для message.
+   Converts serializer errors to a string for message.
     """
     messages = []
     for field, errs in errors.items():
@@ -47,6 +47,7 @@ class ContactsListView(APIView, LimitOffsetPagination):
         params = self.request.query_params
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
 
+        context = {}
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
@@ -76,8 +77,26 @@ class ContactsListView(APIView, LimitOffsetPagination):
             #     queryset = queryset.filter(
             #         assigned_to__id__in=params.get("assigned_to")
             #     ).distinct()
+            if params.get("department"):
+                queryset = queryset.filter(department__icontains=params.get("department"))
+                print(f"Filtering by department: {params.get('department')}")
+                print(f"Contacts found: {queryset.count()}")
+                context["selected_department"] = params.get("department")
 
-        context = {}
+            sort_field = params.get("sort_by", "-id")
+            sort_order = params.get("sort_order", "")
+
+            if sort_field == "department":
+                if sort_order and sort_order.lower() == "desc":
+                    queryset = queryset.order_by("-department")
+                else:
+                    queryset = queryset.order_by("department")
+            else:
+                queryset = queryset.order_by(sort_field if sort_field else "-id")
+
+
+
+
         results_contact = self.paginate_queryset(
             queryset.distinct(), self.request, view=self
         )
@@ -114,6 +133,16 @@ class ContactsListView(APIView, LimitOffsetPagination):
             .distinct()
         )
         context["job_titles"] = list(job_titles)
+
+        departments= (
+                self.model.objects.filter(org=self.request.profile.org)
+                .exclude(department__isnull=True)
+                .exclude(department__exact="")
+                .values_list("department", flat=True)
+                .distinct()
+                .order_by("department")
+            )
+        context["departments"] = list(departments)
 
         return context
 
