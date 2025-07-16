@@ -65,6 +65,9 @@ class Lead(BaseModel):
         blank=True,
         related_name="lead_organization",
     )
+    converted = models.BooleanField(
+        _("Converted to Opportunity"), default=False, blank=True, null=True
+    )
     # Removed explicit created_by and updated_by fields to use those from BaseModel
     # which reference common.User instead of Profile
 

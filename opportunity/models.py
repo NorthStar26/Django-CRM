@@ -57,6 +57,21 @@ class Opportunity(BaseModel):
         blank=True,
         related_name="oppurtunity_org",
     )
+    expected_revenue = models.DecimalField(
+        _("Expected Revenue"),
+        decimal_places=2,
+        max_digits=12,
+        blank=True,
+        null=True,
+        help_text=_("Expected revenue from this opportunity"),
+    )
+
+    expected_close_date = models.DateField(
+        _("Expected Close Date"),
+        blank=True,
+        null=True,
+        help_text=_("Expected date when this opportunity will be closed"),
+    )
 
     class Meta:
         verbose_name = "Opportunity"
