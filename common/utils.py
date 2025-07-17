@@ -41,6 +41,24 @@ def jwt_payload_handler(user):
     }
 
 
+PIPELINE_CONFIG = {
+    "QUALIFICATION": {
+        "editable_fields": ["meeting_date"],
+        "next_stage": "IDENTIFY_DECISION_MAKERS"
+    },
+    "IDENTIFY_DECISION_MAKERS": {
+        "editable_fields": ["proposal_doc"],
+        "next_stage": "PROPOSAL"
+    },
+    "PROPOSAL": {
+        "editable_fields": ["feedback"],
+        "next_stage": "NEGOTIATION"
+    },
+    "NEGOTIATION": {
+        "editable_fields": ["expected_close_date", "feedback"],
+        "next_stage": None
+}
+}
 INDCHOICES = (
     ("ADVERTISING", "ADVERTISING"),
     ("AGRICULTURE", "AGRICULTURE"),

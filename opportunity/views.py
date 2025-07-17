@@ -1,6 +1,7 @@
 import json
 
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.pagination import LimitOffsetPagination
@@ -26,7 +27,7 @@ from opportunity.models import Opportunity
 from opportunity.serializer import *
 from opportunity.tasks import send_email_to_assigned_user
 from teams.models import Teams
-
+from common.utils import PIPELINE_CONFIG, STAGES
 
 class OpportunityListView(APIView, LimitOffsetPagination):
 
@@ -538,3 +539,149 @@ class OpportunityAttachmentView(APIView):
             },
             status=status.HTTP_403_FORBIDDEN,
         )
+class OpportunityPipelineView(APIView):
+    """View для работы с Opportunity в pipeline"""
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+    )
+    def get(self, request, pk):
+        """Получить данные opportunity для pipeline view"""
+        opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
+
+        # Проверка прав доступа
+        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+            if not (
+                (request.profile == opportunity.created_by)
+                or (request.profile in opportunity.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to view this opportunity"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        serializer = OpportunityPipelineSerializer(opportunity)
+
+        # Получаем конфигурацию для текущей стадии
+        current_stage_config = PIPELINE_CONFIG.get(opportunity.stage, {})
+
+        # Стадии для отображения (без CLOSE пока)
+        available_stages = [
+            {'value': 'QUALIFICATION', 'label': 'Qualification'},
+            {'value': 'IDENTIFY_DECISION_MAKERS', 'label': 'Identify Decision Makers'},
+            {'value': 'PROPOSAL', 'label': 'Proposal'},
+            {'value': 'NEGOTIATION', 'label': 'Negotiation'}
+        ]
+
+        # Формируем метаданные для фронтенда
+        pipeline_metadata = {
+            'current_stage': opportunity.stage,
+            'current_stage_display': opportunity.get_stage_display(),
+            'editable_fields': current_stage_config.get('editable_fields', []),
+            'next_stage': current_stage_config.get('next_stage'),
+            'available_stages': available_stages,
+            'is_at_negotiation': opportunity.stage == 'NEGOTIATION'
+        }
+
+        return Response({
+            'error': False,
+            'opportunity': serializer.data,
+            'pipeline_metadata': pipeline_metadata
+        })
+
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+        request=OpportunityPipelineUpdateSerializer,
+    )
+    def patch(self, request, pk):
+        """Обновить opportunity при движении по pipeline"""
+        opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
+
+        # Проверка прав доступа
+        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+            if not (
+                (request.profile == opportunity.created_by)
+                or (request.profile in opportunity.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to update this opportunity"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # Проверяем, что opportunity активна
+        if not opportunity.is_active:
+            return Response(
+                {
+                    "error": True,
+                    "errors": "Cannot update inactive opportunity"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Сохраняем старые значения для логирования
+        old_values = {
+            'stage': opportunity.stage,
+            'meeting_date': opportunity.meeting_date,
+            'feedback': opportunity.feedback,
+            'expected_close_date': opportunity.expected_close_date,
+            'has_proposal': bool(opportunity.proposal_doc)
+        }
+
+        # Обрабатываем файлы
+        data = request.data.copy()
+
+        # Если загружается proposal_doc
+        if 'proposal_doc' in request.FILES:
+            opportunity.proposal_doc = request.FILES['proposal_doc']
+            opportunity.save()
+
+        serializer = OpportunityPipelineUpdateSerializer(
+            opportunity,
+            data=data,
+            partial=True,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            opportunity = serializer.save()
+
+            # Логирование изменений
+            changes = []
+
+            if old_values['stage'] != opportunity.stage:
+                changes.append(f"Stage: {old_values['stage']} → {opportunity.stage}")
+
+            if old_values['meeting_date'] != opportunity.meeting_date:
+                changes.append("Meeting date updated")
+
+            if 'proposal_doc' in request.FILES:
+                changes.append("Proposal document uploaded")
+
+            if old_values['feedback'] != opportunity.feedback:
+                changes.append("Feedback updated")
+
+            if old_values['expected_close_date'] != opportunity.expected_close_date:
+                changes.append("Expected close date updated")
+
+            response_serializer = OpportunityPipelineSerializer(opportunity)
+
+            return Response({
+                'error': False,
+                'message': 'Opportunity updated successfully',
+                'opportunity': response_serializer.data,
+                'changes': changes
+            })
+
+        return Response({
+            'error': True,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)

@@ -6,7 +6,7 @@ from common.serializer import AttachmentsSerializer, ProfileSerializer,UserSeria
 from contacts.serializer import ContactSerializer
 from opportunity.models import Opportunity
 from teams.serializer import TeamsSerializer
-
+from common.utils import PIPELINE_CONFIG
 
 class TagsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -131,3 +131,77 @@ class OpportunityDetailEditSwaggerSerializer(serializers.Serializer):
 
 class OpportunityCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
+
+class OpportunityPipelineSerializer(serializers.ModelSerializer):
+    """Сериализатор для отображения Opportunity в pipeline"""
+    stage_display = serializers.CharField(source='get_stage_display', read_only=True)
+    contacts_info = ContactSerializer(source='contacts', many=True, read_only=True)
+    assigned_to_info = ProfileSerializer(source='assigned_to', many=True, read_only=True)
+
+    class Meta:
+        model = Opportunity
+        fields = (
+            'id',
+            'name',
+            'stage',
+            'stage_display',
+            'contacts',
+            'contacts_info',
+            'meeting_date',
+            'amount',
+            'currency',
+            'probability',
+            'expected_revenue',
+            'assigned_to',
+            'assigned_to_info',
+            'expected_close_date',
+            'lead_source',
+            'created_at',
+            'description',
+            'proposal_doc',
+            'feedback',
+            'is_active',
+        )
+        read_only_fields = ('id', 'created_at')
+
+
+class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
+    """Сериализатор для обновления полей при движении по pipeline"""
+
+    class Meta:
+        model = Opportunity
+        fields = (
+            'stage',
+            'meeting_date',
+            'proposal_doc',
+            'feedback',
+            'expected_close_date',
+        )
+
+    def validate(self, data):
+        """Валидация обновления в зависимости от стадии"""
+        if self.instance:
+            current_stage = self.instance.stage
+            new_stage = data.get('stage', current_stage)
+
+            # Временно блокируем переход на CLOSE
+            if new_stage == 'CLOSE':
+                raise serializers.ValidationError(
+                    "Moving to CLOSE stage is not available yet"
+                )
+
+            # Получаем конфигурацию для проверки
+            stage_to_check = new_stage if new_stage else current_stage
+            stage_config = PIPELINE_CONFIG.get(stage_to_check, {})
+
+            allowed_fields = stage_config.get('editable_fields', [])
+            allowed_fields.append('stage')  # Всегда можно менять стадию
+
+            # Проверяем, что редактируем только разрешенные поля
+            for field in data.keys():
+                if field not in allowed_fields:
+                    raise serializers.ValidationError(
+                        f"Field '{field}' cannot be edited at stage '{stage_to_check}'"
+                    )
+
+        return data

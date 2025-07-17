@@ -1,4 +1,5 @@
 import arrow
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
@@ -9,8 +10,9 @@ from common.base import BaseModel
 from common.utils import CURRENCY_CODES, SOURCES, STAGES
 from contacts.models import Contact
 from teams.models import Teams
-
-
+from leads.models import Lead
+from django.utils import timezone
+import datetime
 class Opportunity(BaseModel):
     name = models.CharField(pgettext_lazy("Name of Opportunity", "Name"), max_length=64)
     account = models.ForeignKey(
@@ -47,7 +49,7 @@ class Opportunity(BaseModel):
     assigned_to = models.ManyToManyField(
         Profile, related_name="opportunity_assigned_to"
     )
-    is_active = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     tags = models.ManyToManyField(Tags, blank=True)
     teams = models.ManyToManyField(Teams, related_name="oppurtunity_teams")
     org = models.ForeignKey(
@@ -72,7 +74,35 @@ class Opportunity(BaseModel):
         null=True,
         help_text=_("Expected date when this opportunity will be closed"),
     )
+    meeting_date = models.DateField(
+        _("Meeting Date"),
+        blank=True,
+        null=True,
 
+        help_text=_("Date of the meeting related to this opportunity"),
+    )
+    proposal_doc = models.FileField(
+        _("Proposal Document"),
+        upload_to="opportunity/proposal_docs/",
+        blank=True,
+        null=True,
+        help_text=_("Upload proposal document related to this opportunity"),
+    )
+    feedback = models.TextField(
+        _("Feedback"),
+        blank=True,
+        null=True,
+        help_text=_("Feedback or notes related to this opportunity"),
+    )
+
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='opportunities',
+        help_text=_("Original lead this opportunity was created from")
+    )
     class Meta:
         verbose_name = "Opportunity"
         verbose_name_plural = "Opportunities"
