@@ -119,6 +119,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
     company = serializers.UUIDField(required=True)  # Make company required
     description = serializers.CharField(required=True)  # Make description required
     status = serializers.CharField(required=True)  # Make status required
+    converted = serializers.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
@@ -242,6 +243,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
             "organization",
             "attachment_links",
             # "lead_attachment",
+            "converted",
         )
 
 
@@ -285,6 +287,10 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
     company = serializers.UUIDField(
         help_text="UUID of the Company associated with this lead", required=True
     )
+    converted = serializers.BooleanField(
+        help_text="Whether this lead has been converted to an opportunity",
+        required=False,
+    )
 
     class Meta:
         model = Lead
@@ -303,6 +309,7 @@ class LeadCreateSwaggerSerializer(serializers.ModelSerializer):
             "company",
             "organization",
             "lead_attachment",
+            "converted",
         ]
 
 
