@@ -12,7 +12,7 @@ from accounts.models import Account, Tags
 from accounts.serializer import AccountSerializer, TagsSerailizer
 from common.models import Attachments, Comment, Profile
 
-#from common.external_auth import CustomDualAuthentication
+# from common.external_auth import CustomDualAuthentication
 from common.serializer import (
     AttachmentsSerializer,
     CommentSerializer,
@@ -30,24 +30,29 @@ from teams.models import Teams
 
 class OpportunityListView(APIView, LimitOffsetPagination):
 
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Opportunity
 
     def get_context_data(self, **kwargs):
         params = self.request.query_params
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
+        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
+            "-id"
+        )
         accounts = Account.objects.filter(org=self.request.profile.org)
         contacts = Contact.objects.filter(org=self.request.profile.org)
         if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
             queryset = queryset.filter(
-                Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
+                Q(created_by=self.request.profile.user)
+                | Q(assigned_to=self.request.profile)
             ).distinct()
             accounts = accounts.filter(
-                Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
+                Q(created_by=self.request.profile.user)
+                | Q(assigned_to=self.request.profile)
             ).distinct()
             contacts = contacts.filter(
-                Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
+                Q(created_by=self.request.profile.user)
+                | Q(assigned_to=self.request.profile)
             ).distinct()
 
         if params:
@@ -62,9 +67,7 @@ class OpportunityListView(APIView, LimitOffsetPagination):
                     lead_source__contains=params.get("lead_source")
                 )
             if params.get("tags"):
-                queryset = queryset.filter(
-                    tags__in=params.get("tags")
-                ).distinct()
+                queryset = queryset.filter(tags__in=params.get("tags")).distinct()
 
         context = {}
         results_opportunities = self.paginate_queryset(
@@ -106,10 +109,12 @@ class OpportunityListView(APIView, LimitOffsetPagination):
 
     @extend_schema(
         tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,request=OpportunityCreateSwaggerSerializer
+        parameters=swagger_params1.organization_params,
+        request=OpportunityCreateSwaggerSerializer,
     )
     def post(self, request, *args, **kwargs):
         params = request.data
+
         serializer = OpportunityCreateSerializer(data=params, request_obj=request)
         if serializer.is_valid():
             opportunity_obj = serializer.save(
@@ -120,8 +125,11 @@ class OpportunityListView(APIView, LimitOffsetPagination):
 
             if params.get("contacts"):
                 contacts_list = params.get("contacts")
-                contacts = Contact.objects.filter(id__in=contacts_list, org=request.profile.org)
+                contacts = Contact.objects.filter(
+                    id=contacts_list, org=request.profile.org
+                )
                 opportunity_obj.contacts.add(*contacts)
+                opportunity_obj.save()
 
             if params.get("tags"):
                 tags = params.get("tags")
@@ -144,11 +152,14 @@ class OpportunityListView(APIView, LimitOffsetPagination):
                 opportunity_obj.teams.add(*teams)
 
             if params.get("assigned_to"):
-                assinged_to_list = params.get("assigned_to")
+                assigned_to = params.get("assigned_to")
+                print("assigned_to", assigned_to)
                 profiles = Profile.objects.filter(
-                    id__in=assinged_to_list, org=request.profile.org, is_active=True
+                    id=assigned_to, org=request.profile.org, is_active=True
                 )
+                print("profiles", profiles)
                 opportunity_obj.assigned_to.add(*profiles)
+                opportunity_obj.save()
 
             if self.request.FILES.get("opportunity_attachment"):
                 attachment = Attachments()
@@ -180,7 +191,7 @@ class OpportunityListView(APIView, LimitOffsetPagination):
 
 
 class OpportunityDetailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Opportunity
 
@@ -189,7 +200,8 @@ class OpportunityDetailView(APIView):
 
     @extend_schema(
         tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,request=OpportunityCreateSwaggerSerializer
+        parameters=swagger_params1.organization_params,
+        request=OpportunityCreateSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         params = request.data
@@ -227,7 +239,9 @@ class OpportunityDetailView(APIView):
             opportunity_object.contacts.clear()
             if params.get("contacts"):
                 contacts_list = params.get("contacts")
-                contacts = Contact.objects.filter(id__in=contacts_list, org=request.profile.org)
+                contacts = Contact.objects.filter(
+                    id__in=contacts_list, org=request.profile.org
+                )
                 opportunity_object.contacts.add(*contacts)
 
             opportunity_object.tags.clear()
@@ -317,6 +331,7 @@ class OpportunityDetailView(APIView):
     )
     def get(self, request, pk, format=None):
         self.opportunity = self.get_object(pk=pk)
+        print("opportunity", self.opportunity)
         context = {}
         context["opportunity_obj"] = OpportunitySerializer(self.opportunity).data
         if self.opportunity.org != request.profile.org:
@@ -348,15 +363,13 @@ class OpportunityDetailView(APIView):
 
         if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
             users_mention = list(
-                Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-                    "user__email"
-                )
+                Profile.objects.filter(
+                    is_active=True, org=self.request.profile.org
+                ).values("user__email")
             )
         elif self.request.profile != self.opportunity.created_by:
             if self.opportunity.created_by:
-                users_mention = [
-                    {"username": self.opportunity.created_by.user.email}
-                ]
+                users_mention = [{"username": self.opportunity.created_by.user.email}]
             else:
                 users_mention = []
         else:
@@ -390,7 +403,8 @@ class OpportunityDetailView(APIView):
 
     @extend_schema(
         tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,request=OpportunityDetailEditSwaggerSerializer
+        parameters=swagger_params1.organization_params,
+        request=OpportunityDetailEditSwaggerSerializer,
     )
     def post(self, request, pk, **kwargs):
         params = request.data
@@ -449,7 +463,7 @@ class OpportunityDetailView(APIView):
 
 class OpportunityCommentView(APIView):
     model = Comment
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
@@ -457,7 +471,8 @@ class OpportunityCommentView(APIView):
 
     @extend_schema(
         tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,request=OpportunityCommentEditSwaggerSerializer
+        parameters=swagger_params1.organization_params,
+        request=OpportunityCommentEditSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         params = request.data
@@ -513,7 +528,7 @@ class OpportunityCommentView(APIView):
 
 class OpportunityAttachmentView(APIView):
     model = Attachments
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
