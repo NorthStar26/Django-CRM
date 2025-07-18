@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from accounts.models import Tags
 from accounts.serializer import AccountSerializer
-from common.serializer import AttachmentsSerializer, ProfileSerializer,UserSerializer
+from common.serializer import AttachmentsSerializer, ProfileSerializer, UserSerializer
 from contacts.serializer import ContactSerializer
 from opportunity.models import Opportunity
 from teams.serializer import TeamsSerializer
@@ -51,12 +51,18 @@ class OpportunitySerializer(serializers.ModelSerializer):
             # "get_team_users",
             # "get_team_and_assigned_users",
             # "get_assigned_users_not_in_teams",
+            "expected_revenue",
+            "expected_close_date",
         )
 
 
 class OpportunityCreateSerializer(serializers.ModelSerializer):
     probability = serializers.IntegerField(max_value=100)
     closed_on = serializers.DateField
+    expected_revenue = serializers.DecimalField(
+        decimal_places=2, max_digits=12, required=False, allow_null=True
+    )
+    expected_close_date = serializers.DateField(required=False, allow_null=True)
 
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
@@ -101,11 +107,19 @@ class OpportunityCreateSerializer(serializers.ModelSerializer):
             # "get_team_users",
             # "get_team_and_assigned_users",
             # "get_assigned_users_not_in_teams",
+            "expected_revenue",
+            "expected_close_date",
         )
+
 
 class OpportunityCreateSwaggerSerializer(serializers.ModelSerializer):
     due_date = serializers.DateField()
     opportunity_attachment = serializers.FileField()
+    expected_revenue = serializers.DecimalField(
+        decimal_places=2, max_digits=12, required=False, allow_null=True
+    )
+    expected_close_date = serializers.DateField(required=False, allow_null=True)
+
     class Meta:
         model = Opportunity
         fields = (
@@ -122,12 +136,16 @@ class OpportunityCreateSwaggerSerializer(serializers.ModelSerializer):
             "contacts",
             "due_date",
             "tags",
-            "opportunity_attachment"
+            "opportunity_attachment",
+            "expected_revenue",
+            "expected_close_date",
         )
+
 
 class OpportunityDetailEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
     opportunity_attachment = serializers.FileField()
+
 
 class OpportunityCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
