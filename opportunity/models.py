@@ -1,3 +1,4 @@
+
 import arrow
 
 from django.db import models
@@ -81,13 +82,15 @@ class Opportunity(BaseModel):
 
         help_text=_("Date of the meeting related to this opportunity"),
     )
-    proposal_doc = models.FileField(
-        _("Proposal Document"),
-        upload_to="opportunity/proposal_docs/",
+
+    attachment_links = models.JSONField(
+        _("Attachment Links"),
         blank=True,
         null=True,
-        help_text=_("Upload proposal document related to this opportunity"),
+        default=list,
+        help_text="Store links to attachments as a JSON array",
     )
+
     feedback = models.TextField(
         _("Feedback"),
         blank=True,
@@ -102,6 +105,11 @@ class Opportunity(BaseModel):
         blank=True,
         related_name='opportunities',
         help_text=_("Original lead this opportunity was created from")
+    )
+    result = models.BooleanField(
+        _("Result"),
+        default=False,
+        help_text=_("Result of the opportunity, True if won, False if lost")
     )
     class Meta:
         verbose_name = "Opportunity"

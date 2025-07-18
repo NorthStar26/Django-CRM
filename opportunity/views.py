@@ -11,9 +11,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Account, Tags
 from accounts.serializer import AccountSerializer, TagsSerailizer
-from common.models import Attachments, Comment, Profile
-
-# from common.external_auth import CustomDualAuthentication
+from common.models import Attachments, Comment, Profile, User
 from common.serializer import (
     AttachmentsSerializer,
     CommentSerializer,
@@ -28,6 +26,8 @@ from opportunity.serializer import *
 from opportunity.tasks import send_email_to_assigned_user
 from teams.models import Teams
 from common.utils import PIPELINE_CONFIG, STAGES
+from common.models import Attachments
+
 
 class OpportunityListView(APIView, LimitOffsetPagination):
 
@@ -527,33 +527,174 @@ class OpportunityCommentView(APIView):
         )
 
 
+from common.serializer import AttachmentsSerializer
+
 class OpportunityAttachmentView(APIView):
     model = Attachments
-    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
+    def get_object(self, pk):
+        return get_object_or_404(Opportunity, pk=pk)
+
     @extend_schema(
-        tags=["Opportunities"], parameters=swagger_params1.organization_params
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+
     )
-    def delete(self, request, pk, format=None):
-        self.object = self.model.objects.get(pk=pk)
+    def get(self, request, pk, format=None):
+        """
+        Получить все вложения для opportunity
+        """
+        opportunity = self.get_object(pk)
+
+        # Проверка прав доступа
+        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+            if not (
+                (request.profile == opportunity.created_by)
+                or (request.profile in opportunity.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to view attachments for this opportunity"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        attachments = Attachments.objects.filter(
+            opportunity=opportunity
+        ).order_by("-id")
+
+        return Response({
+            "error": False,
+            "attachments": AttachmentsSerializer(attachments, many=True).data
+        })
+
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+        request=OpportunityAttachmentCreateSwaggerSerializer,
+    )
+    def post(self, request, format=None):
+        """
+        Create an attachment for opportunity using data from Cloudinary
+        """
+        opportunity_id = request.data.get("opportunity_id")
+        file_name = request.data.get("file_name")
+        file_type = request.data.get("file_type", "")
+        file_url = request.data.get("file_url")
+
+        if not (opportunity_id and file_name and file_url):
+            return Response(
+                {"error": True, "errors": "Missing required data"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            opportunity = Opportunity.objects.get(id=opportunity_id, org=request.profile.org)
+
+            # Проверка прав доступа
+            if request.profile.role != "ADMIN" and not request.user.is_superuser:
+                if not (
+                    (request.profile == opportunity.created_by)
+                    or (request.profile in opportunity.assigned_to.all())
+                ):
+                    return Response(
+                        {
+                            "error": True,
+                            "errors": "You don't have permission for this opportunity"
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            attachment = Attachments()
+            attachment.created_by = request.profile.user
+            attachment.file_name = file_name
+            attachment.opportunity = opportunity
+            attachment.attachment = file_url
+            attachment.save()
+
+            # Update attachment_links
+            if not opportunity.attachment_links:
+                opportunity.attachment_links = []
+
+            attachment_info = {
+                'attachment_id': str(attachment.id),
+                'file_name': file_name,
+                'url': file_url,
+                'uploaded_at': attachment.created_at.isoformat(),
+                'file_type': file_type
+            }
+            opportunity.attachment_links.append(attachment_info)
+            opportunity.save()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Attachment created successfully",
+                    "attachment_id": str(attachment.id),
+                    "attachment": file_name,
+                    "attachment_url": file_url,
+                    "attachment_display": file_type,
+                    "created_by": request.profile.user.email,
+                    "created_on": attachment.created_at,
+                    "file_type": (
+                        file_type.split("/") if "/" in file_type else [file_type, ""]
+                    ),
+                    "download_url": file_url,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Opportunity.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Opportunity not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": True, "errors": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+    )
+    def delete(self, request, pk, attachment_id, format=None):
+        """
+        Удалить вложение
+        """
+        opportunity = self.get_object(pk)
+
+        try:
+            attachment = Attachments.objects.get(
+                id=attachment_id,
+                opportunity=opportunity
+            )
+        except Attachments.DoesNotExist:
+            return Response({
+                "error": True,
+                "errors": "Attachment not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Проверка прав доступа (аналогично leads)
         if (
             request.profile.role == "ADMIN"
             or request.user.is_superuser
-            or request.profile == self.object.created_by
+            or request.profile.user == attachment.created_by
         ):
-            self.object.delete()
-            return Response(
-                {"error": False, "message": "Attachment Deleted Successfully"},
-                status=status.HTTP_200_OK,
-            )
-        return Response(
-            {
+            attachment.delete()
+            return Response({
+                "error": False,
+                "message": "Attachment deleted successfully"
+            })
+        else:
+            return Response({
                 "error": True,
-                "errors": "You don't have permission to perform this action.",
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
+                "errors": "You don't have permission to delete this attachment"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+
 class OpportunityPipelineView(APIView):
     """View для работы с Opportunity в pipeline"""
     permission_classes = (IsAuthenticated,)
@@ -600,7 +741,8 @@ class OpportunityPipelineView(APIView):
             'editable_fields': current_stage_config.get('editable_fields', []),
             'next_stage': current_stage_config.get('next_stage'),
             'available_stages': available_stages,
-            'is_at_negotiation': opportunity.stage == 'NEGOTIATION'
+            'is_at_negotiation': opportunity.stage == 'NEGOTIATION',
+            'has_proposal': opportunity.opportunity_attachment.exists()
         }
 
         return Response({
@@ -648,17 +790,28 @@ class OpportunityPipelineView(APIView):
             'meeting_date': opportunity.meeting_date,
             'feedback': opportunity.feedback,
             'expected_close_date': opportunity.expected_close_date,
-            'has_proposal': bool(opportunity.proposal_doc)
+
         }
 
-        # Обрабатываем файлы
+        # Обрабатываем данные
         data = request.data.copy()
 
-        # Если загружается proposal_doc
+        # Обработка файла proposal_doc по аналогии с leads.LeadDetailView.post
         if 'proposal_doc' in request.FILES:
-            opportunity.proposal_doc = request.FILES['proposal_doc']
-            opportunity.save()
+            # Создаем запись в таблице Attachments
+            attachment = Attachments()
+            attachment.created_by = User.objects.get(
+                id=request.profile.user.id
+            )
+            attachment.file_name = request.FILES.get('proposal_doc').name
+            attachment.opportunity = opportunity  # Связываем с opportunity
+            attachment.attachment = request.FILES.get('proposal_doc')
+            attachment.save()
 
+            # Для отслеживания загрузки в pipeline
+            data['has_proposal_doc'] = True
+
+        # Продолжаем обработку остальных данных
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity,
             data=data,
@@ -686,14 +839,20 @@ class OpportunityPipelineView(APIView):
 
             if old_values['expected_close_date'] != opportunity.expected_close_date:
                 changes.append("Expected close date updated")
-
+            # Получаем все вложения для opportunity
+            attachments = Attachments.objects.filter(opportunity=opportunity).order_by('-created_at')
             response_serializer = OpportunityPipelineSerializer(opportunity)
+            response_data = response_serializer.data
+
+            # Добавляем информацию о вложениях в ответ
+            response_data['attachments'] = AttachmentsSerializer(attachments, many=True).data
 
             return Response({
                 'error': False,
                 'message': 'Opportunity updated successfully',
                 'opportunity': response_serializer.data,
-                'changes': changes
+                'changes': changes,
+                'attachments': AttachmentsSerializer(attachments, many=True).data
             })
 
         return Response({

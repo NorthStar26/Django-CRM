@@ -47,7 +47,7 @@ PIPELINE_CONFIG = {
         "next_stage": "IDENTIFY_DECISION_MAKERS"
     },
     "IDENTIFY_DECISION_MAKERS": {
-        "editable_fields": ["proposal_doc"],
+        "editable_fields": ["attachment_links"],
         "next_stage": "PROPOSAL"
     },
     "PROPOSAL": {
@@ -55,7 +55,7 @@ PIPELINE_CONFIG = {
         "next_stage": "NEGOTIATION"
     },
     "NEGOTIATION": {
-        "editable_fields": ["expected_close_date", "feedback"],
+        "editable_fields": ["result"],
         "next_stage": None
 }
 }
@@ -140,17 +140,16 @@ PRIORITY_CHOICE = (
 
 CASE_TYPE = (("Question", "Question"), ("Incident", "Incident"), ("Problem", "Problem"))
 
+
 STAGES = (
     ("QUALIFICATION", "QUALIFICATION"),
-    ("NEEDS ANALYSIS", "NEEDS ANALYSIS"),
-    ("VALUE PROPOSITION", "VALUE PROPOSITION"),
-    ("ID.DECISION MAKERS", "ID.DECISION MAKERS"),
-    ("PERCEPTION ANALYSIS", "PERCEPTION ANALYSIS"),
-    ("PROPOSAL/PRICE QUOTE", "PROPOSAL/PRICE QUOTE"),
-    ("NEGOTIATION/REVIEW", "NEGOTIATION/REVIEW"),
+    ("IDENTIFY_DECISION_MAKERS", "Identify Decision Makers"),
+    ("PROPOSAL", "Proposal"),
+    ("NEGOTIATION", "Negotiation"),
     ("CLOSED WON", "CLOSED WON"),
     ("CLOSED LOST", "CLOSED LOST"),
 )
+
 
 SOURCES = (
     ("NONE", "NONE"),
