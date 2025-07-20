@@ -608,21 +608,25 @@ class OpportunityAttachmentView(APIView):
                     )
 
             attachment = Attachments()
-            attachment.created_by = request.profile.user
+            # created_by ссылается на User, не на Profile
+            attachment.created_by = request.user
             attachment.file_name = file_name
             attachment.opportunity = opportunity
             attachment.attachment = file_url
             attachment.save()
 
+            # Обновляем объект после сохранения
+            attachment.refresh_from_db()
+
             # Update attachment_links
-            if not opportunity.attachment_links:
+            if opportunity.attachment_links is None:
                 opportunity.attachment_links = []
 
             attachment_info = {
                 'attachment_id': str(attachment.id),
                 'file_name': file_name,
                 'url': file_url,
-                'uploaded_at': attachment.created_at.isoformat(),
+                'uploaded_at': attachment.created_at.isoformat() if attachment.created_at else '',
                 'file_type': file_type
             }
             opportunity.attachment_links.append(attachment_info)
@@ -636,8 +640,8 @@ class OpportunityAttachmentView(APIView):
                     "attachment": file_name,
                     "attachment_url": file_url,
                     "attachment_display": file_type,
-                    "created_by": request.profile.user.email,
-                    "created_on": attachment.created_at,
+                    "created_by": request.user.email,
+                    "created_on": attachment.created_at.isoformat() if attachment.created_at else '',
                     "file_type": (
                         file_type.split("/") if "/" in file_type else [file_type, ""]
                     ),
@@ -652,6 +656,9 @@ class OpportunityAttachmentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
+            import traceback
+            print(f"Error in OpportunityAttachmentView.post: {str(e)}")
+            print(traceback.format_exc())
             return Response(
                 {"error": True, "errors": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -796,7 +803,7 @@ class OpportunityPipelineView(APIView):
         # Обрабатываем данные
         data = request.data.copy()
 
-        # Обработка файла proposal_doc по аналогии с leads.LeadDetailView.post
+        # Обработка файла proposal_doc
         if 'proposal_doc' in request.FILES:
             # Создаем запись в таблице Attachments
             attachment = Attachments()
