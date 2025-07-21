@@ -78,8 +78,12 @@ class LeadListView(APIView, LimitOffsetPagination):
                 | Q(lead_source__icontains=search)
                 | Q(status__icontains=search)
                 | Q(contact__first_name__icontains=search)
-                | Q(contact__last_name__icontains=search)  # Add search by contact's last name
-                | Q(contact__primary_email__icontains=search)  # Add search by contact's primary email
+                | Q(
+                    contact__last_name__icontains=search
+                )  # Add search by contact's last name
+                | Q(
+                    contact__primary_email__icontains=search
+                )  # Add search by contact's primary email
                 | Q(company__name__icontains=search)
             )
 
@@ -89,7 +93,9 @@ class LeadListView(APIView, LimitOffsetPagination):
                 queryset = queryset.filter(lead_title__icontains=params.get("name"))
             if params.get("lead_title"):
                 # Add explicit lead_title filter
-                queryset = queryset.filter(lead_title__icontains=params.get("lead_title"))
+                queryset = queryset.filter(
+                    lead_title__icontains=params.get("lead_title")
+                )
             if params.get("description"):
                 queryset = queryset.filter(
                     description__icontains=params.get("description")
@@ -431,6 +437,8 @@ class LeadDetailView(APIView):
             Teams.objects.filter(org=self.request.profile.org), many=True
         ).data
         context["countries"] = COUNTRIES
+        context["converted"] = self.lead_obj.converted
+        print("test", self.lead_obj.converted)
 
         return context
 
@@ -442,6 +450,7 @@ class LeadDetailView(APIView):
     def get(self, request, pk, **kwargs):
         self.lead_obj = self.get_object(pk)
         context = self.get_context_data(**kwargs)
+
         return Response(context)
 
     @extend_schema(
@@ -611,6 +620,11 @@ class LeadDetailView(APIView):
                     comment.save()
 
                 account_object.save()
+
+                # update converted field if it is exists
+                if params.get("converted") is not None:
+                    lead_obj.converted = params.get("converted")
+                    lead_obj.save()
 
                 return Response(
                     {
@@ -807,9 +821,9 @@ class LeadAttachmentView(APIView):
                     "attachment_display": file_type,
                     "created_by": request.profile.user.email,
                     "created_on": attachment.created_at,
-                    "file_type": file_type.split("/")
-                    if "/" in file_type
-                    else [file_type, ""],
+                    "file_type": (
+                        file_type.split("/") if "/" in file_type else [file_type, ""]
+                    ),
                     "download_url": file_url,
                 },
                 status=status.HTTP_201_CREATED,

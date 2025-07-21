@@ -47,6 +47,30 @@ contact_list_get_params = [
         type=OpenApiTypes.STR,
         location=OpenApiParameter.QUERY,
     ),
+    OpenApiParameter(
+        name="department",
+        description="Filter by department",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+    ),
+
+
+    OpenApiParameter(
+        name="sort_by",
+        description="Field to sort by (e.g. department, first_name, last_name)",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY
+    ),
+    OpenApiParameter(
+        name="sort_order",
+        description="Sort order: asc or desc",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY
+    ),
+
 ]
 
 

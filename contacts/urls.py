@@ -9,5 +9,5 @@ urlpatterns = [
     path("<str:pk>/", views.ContactDetailView.as_view()),
     path("comment/<str:pk>/", views.ContactCommentView.as_view()),
     path("attachment/<str:pk>/", views.ContactAttachmentView.as_view()),
+    # path("options/", views.ContactOptionsView.as_view(), name="contact-options"),
 ]
- 
