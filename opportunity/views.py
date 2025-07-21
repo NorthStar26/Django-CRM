@@ -1,4 +1,5 @@
 import json
+from django.utils import timezone
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -578,11 +579,13 @@ class OpportunityAttachmentView(APIView):
     def post(self, request, format=None):
         """
         Create an attachment for opportunity using data from Cloudinary
+        Supports attachment_type: 'proposal' or 'contract'
         """
         opportunity_id = request.data.get("opportunity_id")
         file_name = request.data.get("file_name")
         file_type = request.data.get("file_type", "")
         file_url = request.data.get("file_url")
+        attachment_type = request.data.get("attachment_type", "proposal")  # Новое поле
 
         if not (opportunity_id and file_name and file_url):
             return Response(
@@ -607,8 +610,8 @@ class OpportunityAttachmentView(APIView):
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
+            # Создаем attachment
             attachment = Attachments()
-            # created_by ссылается на User, не на Profile
             attachment.created_by = request.user
             attachment.file_name = file_name
             attachment.opportunity = opportunity
@@ -618,10 +621,7 @@ class OpportunityAttachmentView(APIView):
             # Обновляем объект после сохранения
             attachment.refresh_from_db()
 
-            # Update attachment_links
-            if opportunity.attachment_links is None:
-                opportunity.attachment_links = []
-
+            # Формируем информацию о вложении
             attachment_info = {
                 'attachment_id': str(attachment.id),
                 'file_name': file_name,
@@ -629,16 +629,36 @@ class OpportunityAttachmentView(APIView):
                 'uploaded_at': attachment.created_at.isoformat() if attachment.created_at else '',
                 'file_type': file_type
             }
-            opportunity.attachment_links.append(attachment_info)
+
+            # Обновляем соответствующее поле в зависимости от типа
+            if attachment_type == "contract":
+                # Для контракта обновляем contract_attachment
+                if opportunity.contract_attachment is None:
+                    opportunity.contract_attachment = []
+                opportunity.contract_attachment.append(attachment_info)
+
+                # Если загружаем контракт на стадии CLOSED WON, обновляем дополнительные поля
+                if opportunity.stage == 'CLOSED WON':
+                    opportunity.closed_by = request.profile
+                    opportunity.closed_on = timezone.now().date()
+                    opportunity.result = True
+                    opportunity.probability = 100
+            else:
+                # Для proposal и других обновляем attachment_links
+                if opportunity.attachment_links is None:
+                    opportunity.attachment_links = []
+                opportunity.attachment_links.append(attachment_info)
+
             opportunity.save()
 
             return Response(
                 {
                     "error": False,
-                    "message": "Attachment created successfully",
+                    "message": f"Attachment created successfully as {attachment_type}",
                     "attachment_id": str(attachment.id),
                     "attachment": file_name,
                     "attachment_url": file_url,
+                    "attachment_type": attachment_type,
                     "attachment_display": file_type,
                     "created_by": request.user.email,
                     "created_on": attachment.created_at.isoformat() if attachment.created_at else '',
@@ -701,7 +721,6 @@ class OpportunityAttachmentView(APIView):
                 "errors": "You don't have permission to delete this attachment"
             }, status=status.HTTP_403_FORBIDDEN)
 
-
 class OpportunityPipelineView(APIView):
     """View для работы с Opportunity в pipeline"""
     permission_classes = (IsAuthenticated,)
@@ -730,16 +749,32 @@ class OpportunityPipelineView(APIView):
 
         serializer = OpportunityPipelineSerializer(opportunity)
 
-        # Получаем конфигурацию для текущей стадии
-        current_stage_config = PIPELINE_CONFIG.get(opportunity.stage, {})
+        # Определяем текущую стадию для конфигурации
+        config_stage = opportunity.stage
+        current_stage_config = PIPELINE_CONFIG.get(config_stage, {})
 
-        # Стадии для отображения (без CLOSE пока)
+        # Стадии для отображения - всегда показываем первые 4
         available_stages = [
             {'value': 'QUALIFICATION', 'label': 'Qualification'},
             {'value': 'IDENTIFY_DECISION_MAKERS', 'label': 'Identify Decision Makers'},
             {'value': 'PROPOSAL', 'label': 'Proposal'},
             {'value': 'NEGOTIATION', 'label': 'Negotiation'}
         ]
+
+        # Показываем стадию CLOSE только если:
+        # 1. Мы уже на стадии NEGOTIATION (с заполненным feedback)
+        # 2. Или мы уже на стадии CLOSE или позже
+        if opportunity.stage == 'NEGOTIATION' and opportunity.feedback:
+            available_stages.append({'value': 'CLOSE', 'label': 'Close'})
+        elif opportunity.stage in ['CLOSE', 'CLOSED WON', 'CLOSED LOST']:
+            available_stages.append({'value': 'CLOSE', 'label': 'Close'})
+
+        # Если opportunity уже закрыта, показываем конкретный статус
+        if opportunity.stage in ['CLOSED WON', 'CLOSED LOST']:
+            available_stages.append({
+                'value': opportunity.stage,
+                'label': 'Closed Won' if opportunity.stage == 'CLOSED WON' else 'Closed Lost'
+            })
 
         # Формируем метаданные для фронтенда
         pipeline_metadata = {
@@ -748,8 +783,12 @@ class OpportunityPipelineView(APIView):
             'editable_fields': current_stage_config.get('editable_fields', []),
             'next_stage': current_stage_config.get('next_stage'),
             'available_stages': available_stages,
-            'is_at_negotiation': opportunity.stage == 'NEGOTIATION',
-            'has_proposal': opportunity.opportunity_attachment.exists()
+            'is_at_close': opportunity.stage == 'CLOSE',
+            'is_closed': opportunity.stage in ['CLOSED WON', 'CLOSED LOST'],
+            'has_attachments': bool(opportunity.attachment_links),
+            'has_contract': bool(opportunity.contract_attachment),
+            'has_feedback': bool(opportunity.feedback),  # Добавляем для проверки на фронтенде
+            'can_move_to_close': opportunity.stage == 'NEGOTIATION' and bool(opportunity.feedback)  # Можно ли перейти на CLOSE
         }
 
         return Response({
@@ -757,7 +796,6 @@ class OpportunityPipelineView(APIView):
             'opportunity': serializer.data,
             'pipeline_metadata': pipeline_metadata
         })
-
     @extend_schema(
         tags=["Opportunities"],
         parameters=swagger_params1.organization_params,
@@ -796,29 +834,24 @@ class OpportunityPipelineView(APIView):
             'stage': opportunity.stage,
             'meeting_date': opportunity.meeting_date,
             'feedback': opportunity.feedback,
-            'expected_close_date': opportunity.expected_close_date,
-
+            'reason': opportunity.reason,
+            'has_contract': bool(opportunity.contract_attachment)
         }
 
         # Обрабатываем данные
         data = request.data.copy()
 
-        # Обработка файла proposal_doc
-        if 'proposal_doc' in request.FILES:
-            # Создаем запись в таблице Attachments
-            attachment = Attachments()
-            attachment.created_by = User.objects.get(
-                id=request.profile.user.id
-            )
-            attachment.file_name = request.FILES.get('proposal_doc').name
-            attachment.opportunity = opportunity  # Связываем с opportunity
-            attachment.attachment = request.FILES.get('proposal_doc')
-            attachment.save()
+        # Обработка выбора Close option
+        if data.get('close_option') and opportunity.stage == 'CLOSE':
+            # Для CLOSED WON проверяем наличие контракта
+            if data['close_option'] == 'CLOSED WON' and not opportunity.contract_attachment:
+                return Response({
+                    'error': True,
+                    'errors': {
+                        'contract_attachment': 'Please upload contract before closing as won. Use /api/opportunities/attachment/ endpoint with attachment_type="contract"'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Для отслеживания загрузки в pipeline
-            data['has_proposal_doc'] = True
-
-        # Продолжаем обработку остальных данных
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity,
             data=data,
@@ -838,26 +871,22 @@ class OpportunityPipelineView(APIView):
             if old_values['meeting_date'] != opportunity.meeting_date:
                 changes.append("Meeting date updated")
 
-            if 'proposal_doc' in request.FILES:
-                changes.append("Proposal document uploaded")
-
             if old_values['feedback'] != opportunity.feedback:
                 changes.append("Feedback updated")
 
-            if old_values['expected_close_date'] != opportunity.expected_close_date:
-                changes.append("Expected close date updated")
+            if old_values['reason'] != opportunity.reason:
+                changes.append("Close reason added")
+
+            if not old_values['has_contract'] and opportunity.contract_attachment:
+                changes.append("Contract uploaded")
+
             # Получаем все вложения для opportunity
             attachments = Attachments.objects.filter(opportunity=opportunity).order_by('-created_at')
-            response_serializer = OpportunityPipelineSerializer(opportunity)
-            response_data = response_serializer.data
-
-            # Добавляем информацию о вложениях в ответ
-            response_data['attachments'] = AttachmentsSerializer(attachments, many=True).data
 
             return Response({
                 'error': False,
                 'message': 'Opportunity updated successfully',
-                'opportunity': response_serializer.data,
+                'opportunity': OpportunityPipelineSerializer(opportunity).data,
                 'changes': changes,
                 'attachments': AttachmentsSerializer(attachments, many=True).data
             })

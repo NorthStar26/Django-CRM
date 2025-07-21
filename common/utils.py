@@ -43,21 +43,34 @@ def jwt_payload_handler(user):
 
 PIPELINE_CONFIG = {
     "QUALIFICATION": {
-        "editable_fields": ["meeting_date"],
+        "editable_fields": [],  # Этап уже пройден
         "next_stage": "IDENTIFY_DECISION_MAKERS"
     },
     "IDENTIFY_DECISION_MAKERS": {
-        "editable_fields": ["attachment_links"],
+        "editable_fields": ["meeting_date"],
         "next_stage": "PROPOSAL"
     },
     "PROPOSAL": {
-        "editable_fields": ["feedback"],
+        "editable_fields": ["attachment_links"],
         "next_stage": "NEGOTIATION"
     },
     "NEGOTIATION": {
-        "editable_fields": ["result"],
+        "editable_fields": ["feedback"],
+        "next_stage": "CLOSE"
+    },
+    "CLOSE": {
+        "editable_fields": ["close_option"],  #  Won/Lost
+        "next_stage": None  # Dipends on close_option
+    },
+    "CLOSED LOST": {
+        "editable_fields": ["reason"],
         "next_stage": None
-}
+    },
+    "CLOSED WON": {
+        "editable_fields": ["contract_attachment"],
+        "next_stage": None
+    }
+
 }
 INDCHOICES = (
     ("ADVERTISING", "ADVERTISING"),
@@ -146,6 +159,7 @@ STAGES = (
     ("IDENTIFY_DECISION_MAKERS", "Identify Decision Makers"),
     ("PROPOSAL", "Proposal"),
     ("NEGOTIATION", "Negotiation"),
+      ("CLOSE", "Close"),
     ("CLOSED WON", "CLOSED WON"),
     ("CLOSED LOST", "CLOSED LOST"),
 )

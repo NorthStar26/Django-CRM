@@ -9,7 +9,7 @@ urlpatterns = [
 
         # Только Cloudinary upload (без pk в URL)
     path("attachment/", views.OpportunityAttachmentView.as_view()),
-        path("comment/<str:pk>/", views.OpportunityCommentView.as_view()),
+    path("comment/<str:pk>/", views.OpportunityCommentView.as_view()),
     path("<str:pk>/", views.OpportunityDetailView.as_view()),
     path("<str:pk>/pipeline/", views.OpportunityPipelineView.as_view()),
 
