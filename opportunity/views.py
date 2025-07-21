@@ -575,7 +575,7 @@ class OpportunityAttachmentView(APIView):
         parameters=swagger_params1.organization_params,
         request=OpportunityAttachmentCreateSwaggerSerializer,
     )
-    def post(self, request, format=None):
+    def post(self, request, pk=None, format=None):
         """
         Create an attachment for opportunity using data from Cloudinary
         Supports attachment_type: 'proposal' or 'contract'
@@ -584,7 +584,7 @@ class OpportunityAttachmentView(APIView):
         file_name = request.data.get("file_name")
         file_type = request.data.get("file_type", "")
         file_url = request.data.get("file_url")
-        attachment_type = request.data.get("attachment_type", "proposal")  # Новое поле
+        attachment_type = request.data.get("attachment_type", "proposal")
 
         if not (opportunity_id and file_name and file_url):
             return Response(
