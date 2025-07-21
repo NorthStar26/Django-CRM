@@ -3,12 +3,14 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
-from django.core.validators import RegexValidator, EmailValidator, URLValidator
+from django.core.validators import RegexValidator, EmailValidator, URLValidator, FileExtensionValidator
 
 from common.models import Org, Profile
 from common.base import BaseModel
 from common.utils import COUNTRIES, INDCHOICES
 from emails.models import Email
+from common.validators import validate_logo_size
+
 
 
 class CompanyProfile(BaseModel):
@@ -70,6 +72,14 @@ class CompanyProfile(BaseModel):
         null=False,
         help_text=_("Select the industry type of the company"),
         db_index=True # Indexing for faster lookups
+    )
+
+    logo_url = models.URLField(
+    _("Company Logo URL"),
+    max_length=500,
+    null=True,
+    blank=True,
+    help_text=_("Cloudinary URL for the company logo")
     )
 
     # Billing Address
