@@ -18,7 +18,7 @@ from common.serializer import (
     CommentSerializer,
     ProfileSerializer,
 )
-from common.utils import CURRENCY_CODES, SOURCES, STAGES
+from common.utils import CURRENCY_CODES, SOURCES, STAGES,PIPELINE_CONFIG
 from contacts.models import Contact
 from contacts.serializer import ContactSerializer
 from opportunity import swagger_params1
@@ -26,8 +26,7 @@ from opportunity.models import Opportunity
 from opportunity.serializer import *
 from opportunity.tasks import send_email_to_assigned_user
 from teams.models import Teams
-from common.utils import PIPELINE_CONFIG, STAGES
-from common.models import Attachments
+
 
 
 class OpportunityListView(APIView, LimitOffsetPagination):
@@ -726,9 +725,9 @@ class OpportunityPipelineView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
-        tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,
-    )
+    tags=["Opportunities"],
+    parameters=swagger_params1.organization_params,
+)
     def get(self, request, pk):
         """Получить данные opportunity для pipeline view"""
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
@@ -753,42 +752,65 @@ class OpportunityPipelineView(APIView):
         config_stage = opportunity.stage
         current_stage_config = PIPELINE_CONFIG.get(config_stage, {})
 
-        # Стадии для отображения - всегда показываем первые 4
+        # Отображаем стадии pipeline БЕЗ CLOSED WON/LOST
+        # Только основные стадии для отображения в pipeline
         available_stages = [
             {'value': 'QUALIFICATION', 'label': 'Qualification'},
             {'value': 'IDENTIFY_DECISION_MAKERS', 'label': 'Identify Decision Makers'},
             {'value': 'PROPOSAL', 'label': 'Proposal'},
-            {'value': 'NEGOTIATION', 'label': 'Negotiation'}
+            {'value': 'NEGOTIATION', 'label': 'Negotiation'},
+            {'value': 'CLOSE', 'label': 'Close'}
         ]
 
-        # Показываем стадию CLOSE только если:
-        # 1. Мы уже на стадии NEGOTIATION (с заполненным feedback)
-        # 2. Или мы уже на стадии CLOSE или позже
-        if opportunity.stage == 'NEGOTIATION' and opportunity.feedback:
-            available_stages.append({'value': 'CLOSE', 'label': 'Close'})
-        elif opportunity.stage in ['CLOSE', 'CLOSED WON', 'CLOSED LOST']:
-            available_stages.append({'value': 'CLOSE', 'label': 'Close'})
+        # Если opportunity уже в статусе CLOSED WON или CLOSED LOST,
+        # отображаем стадию CLOSE как активную в pipeline
+        display_stage = opportunity.stage
+        if display_stage in ['CLOSED WON', 'CLOSED LOST']:
+            display_stage = 'CLOSE'
 
-        # Если opportunity уже закрыта, показываем конкретный статус
-        if opportunity.stage in ['CLOSED WON', 'CLOSED LOST']:
-            available_stages.append({
-                'value': opportunity.stage,
-                'label': 'Closed Won' if opportunity.stage == 'CLOSED WON' else 'Closed Lost'
-            })
+        # Опции для выбора на стадии CLOSE
+        close_options = [
+            {'value': 'CLOSED WON', 'label': 'Close as Won'},
+            {'value': 'CLOSED LOST', 'label': 'Close as Lost'}
+        ]
+
+        # Доступные переходы между стадиями
+        available_transitions = []
+
+        # Определяем доступные переходы на основе текущей стадии и выполненных условий
+        if opportunity.stage == 'QUALIFICATION':
+            available_transitions.append('IDENTIFY_DECISION_MAKERS')
+
+        elif opportunity.stage == 'IDENTIFY_DECISION_MAKERS':
+            if opportunity.meeting_date:
+                available_transitions.append('PROPOSAL')
+
+        elif opportunity.stage == 'PROPOSAL':
+            if opportunity.attachment_links:
+                available_transitions.append('NEGOTIATION')
+
+        elif opportunity.stage == 'NEGOTIATION':
+            if opportunity.feedback:
+                available_transitions.append('CLOSE')
 
         # Формируем метаданные для фронтенда
         pipeline_metadata = {
             'current_stage': opportunity.stage,
+            'display_stage': display_stage,  # Для визуального отображения в pipeline
             'current_stage_display': opportunity.get_stage_display(),
             'editable_fields': current_stage_config.get('editable_fields', []),
             'next_stage': current_stage_config.get('next_stage'),
-            'available_stages': available_stages,
+            'available_stages': available_stages,  # Стадии для отображения в pipeline
+            'available_transitions': available_transitions,  # Доступные переходы
+            'close_options': close_options,  # Опции для выбора при закрытии
             'is_at_close': opportunity.stage == 'CLOSE',
             'is_closed': opportunity.stage in ['CLOSED WON', 'CLOSED LOST'],
+            'close_result': 'won' if opportunity.stage == 'CLOSED WON' else ('lost' if opportunity.stage == 'CLOSED LOST' else None),
             'has_attachments': bool(opportunity.attachment_links),
             'has_contract': bool(opportunity.contract_attachment),
-            'has_feedback': bool(opportunity.feedback),  # Добавляем для проверки на фронтенде
-            'can_move_to_close': opportunity.stage == 'NEGOTIATION' and bool(opportunity.feedback)  # Можно ли перейти на CLOSE
+            'has_feedback': bool(opportunity.feedback),
+            'can_move_to_close': opportunity.stage == 'NEGOTIATION' and bool(opportunity.feedback),
+            'reason': opportunity.reason if opportunity.stage == 'CLOSED LOST' else None
         }
 
         return Response({
