@@ -819,10 +819,10 @@ class OpportunityPipelineView(APIView):
             'pipeline_metadata': pipeline_metadata
         })
     @extend_schema(
-        tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,
-        request=OpportunityPipelineUpdateSerializer,
-    )
+    tags=["Opportunities"],
+    parameters=swagger_params1.organization_params,
+    request=OpportunityPipelineUpdateSerializer,
+)
     def patch(self, request, pk):
         """Обновить opportunity при движении по pipeline"""
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
@@ -863,6 +863,67 @@ class OpportunityPipelineView(APIView):
         # Обрабатываем данные
         data = request.data.copy()
 
+        # Handle stage transitions
+        current_stage = opportunity.stage
+        new_stage = data.get('stage')
+
+        # Обработка случая с переходом QUALIFICATION -> PROPOSAL с meeting_date
+        # В этом случае сначала сохраняем meeting_date
+        if current_stage == 'QUALIFICATION' and new_stage == 'PROPOSAL' and data.get('meeting_date'):
+            # Сохраняем meeting_date в opportunity перед сменой стадии
+            opportunity.meeting_date = data.get('meeting_date')
+            opportunity.save(update_fields=['meeting_date'])
+
+            # Удаляем meeting_date из data, чтобы не вызвать ошибку валидации
+            # о невозможности изменения meeting_date на стадии PROPOSAL
+            if 'meeting_date' in data:
+                del data['meeting_date']
+
+        # Для обратной совместимости - запрос со stage=IDENTIFY_DECISION_MAKERS
+        elif current_stage == 'QUALIFICATION' and new_stage == 'IDENTIFY_DECISION_MAKERS' and data.get('meeting_date'):
+            # Сохраняем meeting_date
+            opportunity.meeting_date = data.get('meeting_date')
+            opportunity.save(update_fields=['meeting_date'])
+
+            # Переводим на PROPOSAL и удаляем meeting_date из данных
+            data['stage'] = 'PROPOSAL'
+            if 'meeting_date' in data:
+                del data['meeting_date']
+
+        # Handle validations for transitions
+        if new_stage and new_stage != current_stage:
+            # Validate transition from QUALIFICATION to PROPOSAL - requires meeting_date
+            if current_stage == 'QUALIFICATION' and new_stage == 'PROPOSAL':
+                if not opportunity.meeting_date and not data.get('meeting_date'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Meeting date is required to move to Proposal stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from IDENTIFY_DECISION_MAKERS to PROPOSAL - requires meeting_date
+            elif current_stage == 'IDENTIFY_DECISION_MAKERS' and new_stage == 'PROPOSAL':
+                if not opportunity.meeting_date and not data.get('meeting_date'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Meeting date is required to move to Proposal stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from PROPOSAL to NEGOTIATION - requires attachment
+            if current_stage == 'PROPOSAL' and new_stage == 'NEGOTIATION':
+                if not opportunity.attachment_links:
+                    return Response({
+                        'error': True,
+                        'errors': 'Proposal document is required to move to Negotiation stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from NEGOTIATION to CLOSE - requires feedback
+            if current_stage == 'NEGOTIATION' and new_stage == 'CLOSE':
+                if not opportunity.feedback and not data.get('feedback'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Feedback is required to move to Close stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
         # Обработка выбора Close option
         if data.get('close_option') and opportunity.stage == 'CLOSE':
             # Для CLOSED WON проверяем наличие контракта
@@ -873,6 +934,8 @@ class OpportunityPipelineView(APIView):
                         'contract_attachment': 'Please upload contract before closing as won. Use /api/opportunities/attachment/ endpoint with attachment_type="contract"'
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+            data['stage'] = data['close_option']
 
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity,
