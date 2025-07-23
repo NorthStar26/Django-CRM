@@ -14,7 +14,8 @@ from .serializer import (
     CompanyDetailSerializer,
     CompanyCreateUpdateSerializer,
     CompanySwaggerCreateSerializer,
-    CompanySwaggerListSerializer
+    CompanySwaggerListSerializer,
+    CompanyLogoUpdateSerializer
 )
 from .swagger_params1 import company_list_get_params, company_auth_headers
 def format_serializer_errors(serializer_errors):
@@ -313,4 +314,53 @@ class CompanyDetailView(APIView):
         return Response(
             {"error": False, 'message': 'Company deleted successfully'},
             status=status.HTTP_200_OK,
+        )
+
+@extend_schema_view(
+    put=extend_schema(
+        tags=["Companies"],
+        description="Update company logo",
+        parameters=company_auth_headers,
+        request=CompanyLogoUpdateSerializer,
+        responses={
+            200: {"description": "Logo updated successfully"},
+            400: {"description": "Invalid logo URL"},
+            404: {"description": "Company not found"}
+        }
+    )
+)
+class CompanyLogoUploadView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def patch(self, request, pk, *args, **kwargs):
+        try:
+            company = CompanyProfile.objects.get(pk=pk)
+        except CompanyProfile.DoesNotExist:
+            return Response(
+                {"error": True, "message": "Company not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check organization match
+        if company.org != request.profile.org:
+            return Response(
+                {"error": True, "message": "Access denied: company does not belong to your organization"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # ✅ FIXED: add partial=True
+        serializer = CompanyLogoUpdateSerializer(
+            company, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"error": False, "message": "Logo updated successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"error": True, "message": "Invalid input", "details": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
         )
