@@ -215,6 +215,23 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "profile_pic"]
 
+class UserImageSerializer(serializers.Serializer):
+    profile_pic = serializers.CharField(
+        allow_null=True, 
+        required=False,
+        help_text="Set to null or empty string to remove profile picture"
+    )
+    email = serializers.EmailField(
+        required=True,
+        help_text="User's email for verification"
+    )
+
+    def validate_profile_pic(self, value):
+        """Allow null/empty string but validate if provided"""
+        if value in [None, ""]:
+            return None
+        # Add any additional validation for the image URL if needed
+        return value
 
 class ProfileSerializer(serializers.ModelSerializer):
     address = BillingAddressSerializer(

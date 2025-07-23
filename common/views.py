@@ -1162,16 +1162,33 @@ class UserImageView(APIView):
     @extend_schema(
         tags=["users"],
         parameters=swagger_params1.organization_params,
+        request=UserImageSerializer,  # Make sure to create this serializer
     )
     def put(self, request, pk):
         profile = get_object_or_404(Profile, user__id=pk, org=request.profile.org)
-        print(request.data.get("profile_pic"))
-
+        
+        # Check if the request is to remove the profile picture
+        if request.data.get("profile_pic") in [None, ""]:
+            # Clear the profile picture
+            profile.user.profile_pic = None
+            profile.user.save()
+            
+            return Response(
+                {
+                    "error": False, 
+                    "message": "Profile picture removed successfully",
+                    "profile_pic": None
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        # Handle regular profile picture update
         if not request.data.get("profile_pic"):
             return Response(
                 {"error": True, "errors": "Profile picture is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+            
         if request.data.get("email") != profile.user.email:
             return Response(
                 {
@@ -1180,16 +1197,18 @@ class UserImageView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        # Update the user's profile picture
+            
+        # Update the profile picture
         profile.user.profile_pic = request.data.get("profile_pic")
-        profile.save()  # Save the user object to update the profile picture
-        user = User.objects.get(id=profile.user.id)
-        print(user)
-        user.profile_pic = request.data.get("profile_pic")
-        user.save()  # Save the user object to update the profile picture
+        profile.user.save()
+        
         return Response(
-            {"error": False, "message": "Profile picture updated successfully"},
-            status=status.HTTP_200_OK,
+            {
+                "error": False, 
+                "message": "Profile picture updated successfully",
+                "profile_pic": profile.user.profile_pic
+            },
+            status=status.HTTP_200_OK
         )
 
 
