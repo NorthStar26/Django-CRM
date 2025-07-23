@@ -1,4 +1,5 @@
 import json
+from django.utils import timezone
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -17,7 +18,7 @@ from common.serializer import (
     CommentSerializer,
     ProfileSerializer,
 )
-from common.utils import CURRENCY_CODES, SOURCES, STAGES
+from common.utils import CURRENCY_CODES, SOURCES, STAGES,PIPELINE_CONFIG
 from contacts.models import Contact
 from contacts.serializer import ContactSerializer
 from opportunity import swagger_params1
@@ -25,8 +26,7 @@ from opportunity.models import Opportunity
 from opportunity.serializer import *
 from opportunity.tasks import send_email_to_assigned_user
 from teams.models import Teams
-from common.utils import PIPELINE_CONFIG, STAGES
-from common.models import Attachments
+
 
 
 class OpportunityListView(APIView, LimitOffsetPagination):
@@ -575,14 +575,16 @@ class OpportunityAttachmentView(APIView):
         parameters=swagger_params1.organization_params,
         request=OpportunityAttachmentCreateSwaggerSerializer,
     )
-    def post(self, request, format=None):
+    def post(self, request, pk=None, format=None):
         """
         Create an attachment for opportunity using data from Cloudinary
+        Supports attachment_type: 'proposal' or 'contract'
         """
         opportunity_id = request.data.get("opportunity_id")
         file_name = request.data.get("file_name")
         file_type = request.data.get("file_type", "")
         file_url = request.data.get("file_url")
+        attachment_type = request.data.get("attachment_type", "proposal")
 
         if not (opportunity_id and file_name and file_url):
             return Response(
@@ -607,37 +609,58 @@ class OpportunityAttachmentView(APIView):
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
+            # Создаем attachment
             attachment = Attachments()
-            attachment.created_by = request.profile.user
+            attachment.created_by = request.user
             attachment.file_name = file_name
             attachment.opportunity = opportunity
             attachment.attachment = file_url
             attachment.save()
 
-            # Update attachment_links
-            if not opportunity.attachment_links:
-                opportunity.attachment_links = []
+            # Обновляем объект после сохранения
+            attachment.refresh_from_db()
 
+            # Формируем информацию о вложении
             attachment_info = {
                 'attachment_id': str(attachment.id),
                 'file_name': file_name,
                 'url': file_url,
-                'uploaded_at': attachment.created_at.isoformat(),
+                'uploaded_at': attachment.created_at.isoformat() if attachment.created_at else '',
                 'file_type': file_type
             }
-            opportunity.attachment_links.append(attachment_info)
+
+            # Обновляем соответствующее поле в зависимости от типа
+            if attachment_type == "contract":
+                # Для контракта обновляем contract_attachment
+                if opportunity.contract_attachment is None:
+                    opportunity.contract_attachment = []
+                opportunity.contract_attachment.append(attachment_info)
+
+                # Если загружаем контракт на стадии CLOSED WON, обновляем дополнительные поля
+                if opportunity.stage == 'CLOSED WON':
+                    opportunity.closed_by = request.profile
+                    opportunity.closed_on = timezone.now().date()
+                    opportunity.result = True
+                    opportunity.probability = 100
+            else:
+                # Для proposal и других обновляем attachment_links
+                if opportunity.attachment_links is None:
+                    opportunity.attachment_links = []
+                opportunity.attachment_links.append(attachment_info)
+
             opportunity.save()
 
             return Response(
                 {
                     "error": False,
-                    "message": "Attachment created successfully",
+                    "message": f"Attachment created successfully as {attachment_type}",
                     "attachment_id": str(attachment.id),
                     "attachment": file_name,
                     "attachment_url": file_url,
+                    "attachment_type": attachment_type,
                     "attachment_display": file_type,
-                    "created_by": request.profile.user.email,
-                    "created_on": attachment.created_at,
+                    "created_by": request.user.email,
+                    "created_on": attachment.created_at.isoformat() if attachment.created_at else '',
                     "file_type": (
                         file_type.split("/") if "/" in file_type else [file_type, ""]
                     ),
@@ -652,6 +675,9 @@ class OpportunityAttachmentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
+            import traceback
+            print(f"Error in OpportunityAttachmentView.post: {str(e)}")
+            print(traceback.format_exc())
             return Response(
                 {"error": True, "errors": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -694,15 +720,14 @@ class OpportunityAttachmentView(APIView):
                 "errors": "You don't have permission to delete this attachment"
             }, status=status.HTTP_403_FORBIDDEN)
 
-
 class OpportunityPipelineView(APIView):
     """View для работы с Opportunity в pipeline"""
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
-        tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,
-    )
+    tags=["Opportunities"],
+    parameters=swagger_params1.organization_params,
+)
     def get(self, request, pk):
         """Получить данные opportunity для pipeline view"""
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
@@ -723,26 +748,69 @@ class OpportunityPipelineView(APIView):
 
         serializer = OpportunityPipelineSerializer(opportunity)
 
-        # Получаем конфигурацию для текущей стадии
-        current_stage_config = PIPELINE_CONFIG.get(opportunity.stage, {})
+        # Определяем текущую стадию для конфигурации
+        config_stage = opportunity.stage
+        current_stage_config = PIPELINE_CONFIG.get(config_stage, {})
 
-        # Стадии для отображения (без CLOSE пока)
+        # Отображаем стадии pipeline БЕЗ CLOSED WON/LOST
+        # Только основные стадии для отображения в pipeline
         available_stages = [
             {'value': 'QUALIFICATION', 'label': 'Qualification'},
             {'value': 'IDENTIFY_DECISION_MAKERS', 'label': 'Identify Decision Makers'},
             {'value': 'PROPOSAL', 'label': 'Proposal'},
-            {'value': 'NEGOTIATION', 'label': 'Negotiation'}
+            {'value': 'NEGOTIATION', 'label': 'Negotiation'},
+            {'value': 'CLOSE', 'label': 'Close'}
         ]
+
+        # Если opportunity уже в статусе CLOSED WON или CLOSED LOST,
+        # отображаем стадию CLOSE как активную в pipeline
+        display_stage = opportunity.stage
+        if display_stage in ['CLOSED WON', 'CLOSED LOST']:
+            display_stage = 'CLOSE'
+
+        # Опции для выбора на стадии CLOSE
+        close_options = [
+            {'value': 'CLOSED WON', 'label': 'Close as Won'},
+            {'value': 'CLOSED LOST', 'label': 'Close as Lost'}
+        ]
+
+        # Доступные переходы между стадиями
+        available_transitions = []
+
+        # Определяем доступные переходы на основе текущей стадии и выполненных условий
+        if opportunity.stage == 'QUALIFICATION':
+            available_transitions.append('IDENTIFY_DECISION_MAKERS')
+
+        elif opportunity.stage == 'IDENTIFY_DECISION_MAKERS':
+            if opportunity.meeting_date:
+                available_transitions.append('PROPOSAL')
+
+        elif opportunity.stage == 'PROPOSAL':
+            if opportunity.attachment_links:
+                available_transitions.append('NEGOTIATION')
+
+        elif opportunity.stage == 'NEGOTIATION':
+            if opportunity.feedback:
+                available_transitions.append('CLOSE')
 
         # Формируем метаданные для фронтенда
         pipeline_metadata = {
             'current_stage': opportunity.stage,
+            'display_stage': display_stage,  # Для визуального отображения в pipeline
             'current_stage_display': opportunity.get_stage_display(),
             'editable_fields': current_stage_config.get('editable_fields', []),
             'next_stage': current_stage_config.get('next_stage'),
-            'available_stages': available_stages,
-            'is_at_negotiation': opportunity.stage == 'NEGOTIATION',
-            'has_proposal': opportunity.opportunity_attachment.exists()
+            'available_stages': available_stages,  # Стадии для отображения в pipeline
+            'available_transitions': available_transitions,  # Доступные переходы
+            'close_options': close_options,  # Опции для выбора при закрытии
+            'is_at_close': opportunity.stage == 'CLOSE',
+            'is_closed': opportunity.stage in ['CLOSED WON', 'CLOSED LOST'],
+            'close_result': 'won' if opportunity.stage == 'CLOSED WON' else ('lost' if opportunity.stage == 'CLOSED LOST' else None),
+            'has_attachments': bool(opportunity.attachment_links),
+            'has_contract': bool(opportunity.contract_attachment),
+            'has_feedback': bool(opportunity.feedback),
+            'can_move_to_close': opportunity.stage == 'NEGOTIATION' and bool(opportunity.feedback),
+            'reason': opportunity.reason if opportunity.stage == 'CLOSED LOST' else None
         }
 
         return Response({
@@ -750,12 +818,11 @@ class OpportunityPipelineView(APIView):
             'opportunity': serializer.data,
             'pipeline_metadata': pipeline_metadata
         })
-
     @extend_schema(
-        tags=["Opportunities"],
-        parameters=swagger_params1.organization_params,
-        request=OpportunityPipelineUpdateSerializer,
-    )
+    tags=["Opportunities"],
+    parameters=swagger_params1.organization_params,
+    request=OpportunityPipelineUpdateSerializer,
+)
     def patch(self, request, pk):
         """Обновить opportunity при движении по pipeline"""
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
@@ -789,29 +856,87 @@ class OpportunityPipelineView(APIView):
             'stage': opportunity.stage,
             'meeting_date': opportunity.meeting_date,
             'feedback': opportunity.feedback,
-            'expected_close_date': opportunity.expected_close_date,
-
+            'reason': opportunity.reason,
+            'has_contract': bool(opportunity.contract_attachment)
         }
 
         # Обрабатываем данные
         data = request.data.copy()
 
-        # Обработка файла proposal_doc по аналогии с leads.LeadDetailView.post
-        if 'proposal_doc' in request.FILES:
-            # Создаем запись в таблице Attachments
-            attachment = Attachments()
-            attachment.created_by = User.objects.get(
-                id=request.profile.user.id
-            )
-            attachment.file_name = request.FILES.get('proposal_doc').name
-            attachment.opportunity = opportunity  # Связываем с opportunity
-            attachment.attachment = request.FILES.get('proposal_doc')
-            attachment.save()
+        # Handle stage transitions
+        current_stage = opportunity.stage
+        new_stage = data.get('stage')
 
-            # Для отслеживания загрузки в pipeline
-            data['has_proposal_doc'] = True
+        # Обработка случая с переходом QUALIFICATION -> PROPOSAL с meeting_date
+        # В этом случае сначала сохраняем meeting_date
+        if current_stage == 'QUALIFICATION' and new_stage == 'PROPOSAL' and data.get('meeting_date'):
+            # Сохраняем meeting_date в opportunity перед сменой стадии
+            opportunity.meeting_date = data.get('meeting_date')
+            opportunity.save(update_fields=['meeting_date'])
 
-        # Продолжаем обработку остальных данных
+            # Удаляем meeting_date из data, чтобы не вызвать ошибку валидации
+            # о невозможности изменения meeting_date на стадии PROPOSAL
+            if 'meeting_date' in data:
+                del data['meeting_date']
+
+        # Для обратной совместимости - запрос со stage=IDENTIFY_DECISION_MAKERS
+        elif current_stage == 'QUALIFICATION' and new_stage == 'IDENTIFY_DECISION_MAKERS' and data.get('meeting_date'):
+            # Сохраняем meeting_date
+            opportunity.meeting_date = data.get('meeting_date')
+            opportunity.save(update_fields=['meeting_date'])
+
+            # Переводим на PROPOSAL и удаляем meeting_date из данных
+            data['stage'] = 'PROPOSAL'
+            if 'meeting_date' in data:
+                del data['meeting_date']
+
+        # Handle validations for transitions
+        if new_stage and new_stage != current_stage:
+            # Validate transition from QUALIFICATION to PROPOSAL - requires meeting_date
+            if current_stage == 'QUALIFICATION' and new_stage == 'PROPOSAL':
+                if not opportunity.meeting_date and not data.get('meeting_date'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Meeting date is required to move to Proposal stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from IDENTIFY_DECISION_MAKERS to PROPOSAL - requires meeting_date
+            elif current_stage == 'IDENTIFY_DECISION_MAKERS' and new_stage == 'PROPOSAL':
+                if not opportunity.meeting_date and not data.get('meeting_date'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Meeting date is required to move to Proposal stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from PROPOSAL to NEGOTIATION - requires attachment
+            if current_stage == 'PROPOSAL' and new_stage == 'NEGOTIATION':
+                if not opportunity.attachment_links:
+                    return Response({
+                        'error': True,
+                        'errors': 'Proposal document is required to move to Negotiation stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate transition from NEGOTIATION to CLOSE - requires feedback
+            if current_stage == 'NEGOTIATION' and new_stage == 'CLOSE':
+                if not opportunity.feedback and not data.get('feedback'):
+                    return Response({
+                        'error': True,
+                        'errors': 'Feedback is required to move to Close stage'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Обработка выбора Close option
+        if data.get('close_option') and opportunity.stage == 'CLOSE':
+            # Для CLOSED WON проверяем наличие контракта
+            if data['close_option'] == 'CLOSED WON' and not opportunity.contract_attachment:
+                return Response({
+                    'error': True,
+                    'errors': {
+                        'contract_attachment': 'Please upload contract before closing as won. Use /api/opportunities/attachment/ endpoint with attachment_type="contract"'
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            data['stage'] = data['close_option']
+
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity,
             data=data,
@@ -831,26 +956,22 @@ class OpportunityPipelineView(APIView):
             if old_values['meeting_date'] != opportunity.meeting_date:
                 changes.append("Meeting date updated")
 
-            if 'proposal_doc' in request.FILES:
-                changes.append("Proposal document uploaded")
-
             if old_values['feedback'] != opportunity.feedback:
                 changes.append("Feedback updated")
 
-            if old_values['expected_close_date'] != opportunity.expected_close_date:
-                changes.append("Expected close date updated")
+            if old_values['reason'] != opportunity.reason:
+                changes.append("Close reason added")
+
+            if not old_values['has_contract'] and opportunity.contract_attachment:
+                changes.append("Contract uploaded")
+
             # Получаем все вложения для opportunity
             attachments = Attachments.objects.filter(opportunity=opportunity).order_by('-created_at')
-            response_serializer = OpportunityPipelineSerializer(opportunity)
-            response_data = response_serializer.data
-
-            # Добавляем информацию о вложениях в ответ
-            response_data['attachments'] = AttachmentsSerializer(attachments, many=True).data
 
             return Response({
                 'error': False,
                 'message': 'Opportunity updated successfully',
-                'opportunity': response_serializer.data,
+                'opportunity': OpportunityPipelineSerializer(opportunity).data,
                 'changes': changes,
                 'attachments': AttachmentsSerializer(attachments, many=True).data
             })

@@ -11,10 +11,12 @@ urlpatterns = [
     path("comment/<str:pk>/", views.OpportunityCommentView.as_view()),
 
 
-    # Только Cloudinary upload (без pk в URL)
     path("attachment/", views.OpportunityAttachmentView.as_view()),
+    path("attachment/<str:pk>/", views.OpportunityAttachmentView.as_view()),
 
     # Удаление и получение вложений (требуется pk opportunity)
-    path("attachment/<str:pk>/", views.OpportunityAttachmentView.as_view()),
     path("attachment/<str:pk>/<str:attachment_id>/", views.OpportunityAttachmentView.as_view()),
+    path("attachment/<str:attachment_id>/", views.OpportunityAttachmentView.as_view()),
+    path("<str:pk>/attachment/", views.OpportunityAttachmentView.as_view())
 ]
+
