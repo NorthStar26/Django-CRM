@@ -13,7 +13,7 @@ class CompanySwaggerCreateSerializer(serializers.ModelSerializer):
         fields = [
             'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country', 'billing_state'
+            'billing_postcode', 'billing_country', 'billing_state','logo_url'
         ]
 
 
@@ -36,6 +36,7 @@ class CompanyListSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
             'billing_postcode', 'billing_country', 'billing_state',
+            'logo_url',
             'created_by', 'organization', 'created_at', 'updated_at'
         ]
 
@@ -52,6 +53,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
             'billing_postcode', 'billing_country', 'billing_state',
+            'logo_url',
             'created_by', 'updated_by', 'organization',
             'created_at', 'updated_at'
         ]
@@ -63,7 +65,7 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'name', 'email', 'phone', 'website', 'industry',
             'billing_street', 'billing_address_number', 'billing_city',
-            'billing_postcode', 'billing_country', 'billing_state'
+            'billing_postcode', 'billing_country', 'billing_state','logo_url'
         ]
     def update(self, instance, validated_data):
         request = self.context.get('request')
@@ -162,3 +164,9 @@ class CompanyCreateUpdateSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+class CompanyLogoUpdateSerializer(serializers.ModelSerializer):
+    logo_url = serializers.URLField(required=False, allow_null=True)
+    class Meta:
+        model = CompanyProfile
+        fields = ['logo_url']

@@ -8,6 +8,7 @@ from django.utils.translation import pgettext_lazy
 from accounts.models import Account, Tags
 from common.models import Org, Profile
 from common.base import BaseModel
+from common.serializer import ResetPasswordConfirmSerializer
 from common.utils import CURRENCY_CODES, SOURCES, STAGES
 from contacts.models import Contact
 from teams.models import Teams
@@ -111,6 +112,21 @@ class Opportunity(BaseModel):
         default=False,
         help_text=_("Result of the opportunity, True if won, False if lost")
     )
+    contract_attachment= models.JSONField(
+        _("Contract Attachment"),
+        blank=True,
+        null=True,
+        default=list,
+        help_text=_("Store links to contract attachments as a JSON array"),
+    )
+    reason = models.TextField(
+        _("Reason"),
+        blank=True,
+        null=True,
+        help_text=_("Reason for the result of the opportunity, if lost")
+    )
+
+
     class Meta:
         verbose_name = "Opportunity"
         verbose_name_plural = "Opportunities"
