@@ -9,6 +9,7 @@ from teams.serializer import TeamsSerializer
 from common.utils import PIPELINE_CONFIG
 from common.models import Attachments
 
+
 class TagsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tags
@@ -27,8 +28,9 @@ class OpportunitySerializer(serializers.ModelSerializer):
     opportunity_attachment = AttachmentsSerializer(
         # source='opportunity_attachment',  # Указываем related_name из модели Attachments
         many=True,
-        read_only=True
+        read_only=True,
     )
+
     class Meta:
         model = Opportunity
         # fields = ‘__all__’
@@ -108,7 +110,7 @@ class OpportunityCreateSerializer(serializers.ModelSerializer):
             "created_at",
             "is_active",
             "created_on_arrow",
-            "org"
+            "org",
             # "get_team_users",
             # "get_team_and_assigned_users",
             # "get_assigned_users_not_in_teams",
@@ -155,12 +157,19 @@ class OpportunityDetailEditSwaggerSerializer(serializers.Serializer):
 class OpportunityCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
 
+
 class OpportunityPipelineSerializer(serializers.ModelSerializer):
-    """ Serializer for Opportunity в pipeline"""
-    stage_display = serializers.CharField(source='get_stage_display', read_only=True)
-    contacts_info = ContactSerializer(source='contacts', many=True, read_only=True)
-    assigned_to_info = ProfileSerializer(source='assigned_to', many=True, read_only=True)
-    attachments = AttachmentsSerializer(source='opportunity_attachment', many=True, read_only=True)
+    """Serializer for Opportunity в pipeline"""
+
+    stage_display = serializers.CharField(source="get_stage_display", read_only=True)
+    contacts_info = ContactSerializer(source="contacts", many=True, read_only=True)
+    assigned_to_info = ProfileSerializer(
+        source="assigned_to", many=True, read_only=True
+    )
+    attachments = AttachmentsSerializer(
+        source="opportunity_attachment", many=True, read_only=True
+    )
+
     # attachments = serializers.SerializerMethodField()
     # def get_attachments(self, obj):
     #     from common.serializer import AttachmentsSerializer
@@ -171,85 +180,88 @@ class OpportunityPipelineSerializer(serializers.ModelSerializer):
     class Meta:
         model = Opportunity
         fields = (
-            'id',
-            'name',
-            'stage',
-            'stage_display',
-            'contacts',
-            'contacts_info',
-            'meeting_date',
-            'amount',
-            'currency',
-            'probability',
-            'expected_revenue',
-            'assigned_to',
-            'assigned_to_info',
-            'expected_close_date',
-            'lead_source',
-            'created_at',
-            'description',
-            'feedback',
-            'is_active',
-            'attachment_links',
-            'attachments',
-            'result'
+            "id",
+            "name",
+            "stage",
+            "stage_display",
+            "contacts",
+            "contacts_info",
+            "meeting_date",
+            "amount",
+            "currency",
+            "probability",
+            "expected_revenue",
+            "assigned_to",
+            "assigned_to_info",
+            "expected_close_date",
+            "lead_source",
+            "created_at",
+            "description",
+            "feedback",
+            "is_active",
+            "attachment_links",
+            "attachments",
+            "result",
         )
-        read_only_fields = ('id', 'created_at')
+        read_only_fields = ("id", "created_at")
 
 
 class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating fields as you move through pipeline"""
+
     close_option = serializers.ChoiceField(
-        choices=['CLOSED LOST', 'CLOSED WON'],
+        choices=["CLOSED LOST", "CLOSED WON"],
         required=False,
         write_only=True,
-        help_text="Select how to close the opportunity"
+        help_text="Select how to close the opportunity",
     )
 
     class Meta:
         model = Opportunity
         fields = (
-            'stage',
-            'meeting_date',
-            'feedback',
-            'expected_close_date',
-            'result',
-            'attachment_links',
-            'reason',
-            'close_option',
-            'contract_attachment'
+            "stage",
+            "meeting_date",
+            "feedback",
+            "expected_close_date",
+            "result",
+            "attachment_links",
+            "reason",
+            "close_option",
+            "contract_attachment",
         )
 
     def validate(self, data):
         """Validation of update depending on stage"""
         if self.instance:
             current_stage = self.instance.stage
-            new_stage = data.get('stage', current_stage)
+            new_stage = data.get("stage", current_stage)
 
             # Обработка выбора закрытия на стадии CLOSE
-            if data.get('close_option') and current_stage == 'CLOSE':
-                new_stage = data['close_option']
-                data['stage'] = new_stage
+            if data.get("close_option") and current_stage == "CLOSE":
+                new_stage = data["close_option"]
+                data["stage"] = new_stage
 
-                if new_stage == 'CLOSED LOST':
-                    data['result'] = False
-                elif new_stage == 'CLOSED WON':
-                    data['result'] = True
+                if new_stage == "CLOSED LOST":
+                    data["result"] = False
+                elif new_stage == "CLOSED WON":
+                    data["result"] = True
 
             # Валидация для CLOSED LOST - требуем reason
-            if current_stage == 'CLOSED LOST' and 'reason' in data:
-                if not data['reason']:
-                    raise serializers.ValidationError({
-                        'reason': 'Please provide a reason for closing as lost'
-                    })
+            if current_stage == "CLOSED LOST" and "reason" in data:
+                if not data["reason"]:
+                    raise serializers.ValidationError(
+                        {"reason": "Please provide a reason for closing as lost"}
+                    )
 
             # Определяем какую конфигурацию использовать
             stage_to_check = new_stage if new_stage != current_stage else current_stage
 
             # Получаем конфигурацию для проверки
             stage_config = PIPELINE_CONFIG.get(stage_to_check, {})
-            allowed_fields = stage_config.get('editable_fields', [])
-            allowed_fields.extend(['stage', 'close_option'])  # Всегда можно менять стадию
+            allowed_fields = stage_config.get("editable_fields", [])
+            allowed_fields.extend(
+                ["stage", "close_option"]
+            )  # Всегда можно менять стадию
 
             # Проверяем только редактируемые поля
             for field in data.keys():
@@ -263,39 +275,30 @@ class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """Update opportunity with pipeline-specific logic"""
         # Устанавливаем дополнительные поля при закрытии
-        if validated_data.get('stage') in ['CLOSED LOST', 'CLOSED WON']:
-            instance.closed_by = self.context['request'].profile
+        if validated_data.get("stage") in ["CLOSED LOST", "CLOSED WON"]:
+            instance.closed_by = self.context["request"].profile
             instance.closed_on = timezone.now().date()
 
-            if validated_data.get('stage') == 'CLOSED LOST':
+            if validated_data.get("stage") == "CLOSED LOST":
                 instance.probability = 0
                 instance.result = False
-            elif validated_data.get('stage') == 'CLOSED WON':
+            elif validated_data.get("stage") == "CLOSED WON":
                 instance.probability = 100
                 instance.result = True
 
         return super().update(instance, validated_data)
+
+
 class OpportunityAttachmentCreateSwaggerSerializer(serializers.Serializer):
     """Swagger schema for uplouding using Cloudinary"""
-    opportunity_id = serializers.UUIDField(
-        help_text="ID  opportunity",
-        required=True
-    )
-    file_name = serializers.CharField(
-        help_text="Name of the file",
-        required=True
-    )
-    file_type = serializers.CharField(
-        help_text="Type of file (MIME)",
-        required=False
-    )
-    file_url = serializers.URLField(
-        help_text="URL файла из Cloudinary",
-        required=True
-    )
+
+    opportunity_id = serializers.UUIDField(help_text="ID  opportunity", required=True)
+    file_name = serializers.CharField(help_text="Name of the file", required=True)
+    file_type = serializers.CharField(help_text="Type of file (MIME)", required=False)
+    file_url = serializers.URLField(help_text="URL файла из Cloudinary", required=True)
     attachment_type = serializers.ChoiceField(
-        choices=['proposal', 'contract'],
-        default='proposal',
+        choices=["proposal", "contract"],
+        default="proposal",
         help_text="Type of attachment: proposal или contract",
-        required=False
+        required=False,
     )
