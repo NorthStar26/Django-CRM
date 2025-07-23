@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from companies.serializer import CompanyDetailSerializer
+from contacts.serializer import ContactSerializer
 
 from accounts.models import Tags
 from accounts.serializer import AccountSerializer
@@ -8,6 +10,26 @@ from opportunity.models import Opportunity
 from teams.serializer import TeamsSerializer
 from common.utils import PIPELINE_CONFIG
 from common.models import Attachments
+from companies.serializer import CompanyListSerializer
+
+class TagsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tags
+        fields = ("id", "name", "slug")
+
+
+from rest_framework import serializers
+from opportunity.models import Opportunity
+from accounts.models import Tags
+from accounts.serializer import AccountSerializer
+from common.serializer import (
+    AttachmentsSerializer,
+    ProfileSerializer,
+    UserSerializer
+)
+from contacts.serializer import ContactSerializer
+from teams.serializer import TeamsSerializer
+
 
 class TagsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,22 +38,22 @@ class TagsSerializer(serializers.ModelSerializer):
 
 
 class OpportunitySerializer(serializers.ModelSerializer):
-    account = AccountSerializer()
+    company_name = serializers.CharField(source="company.name", read_only=True)
     closed_by = ProfileSerializer()
     created_by = UserSerializer()
     tags = TagsSerializer(read_only=True, many=True)
     assigned_to = ProfileSerializer(read_only=True, many=True)
     contacts = ContactSerializer(read_only=True, many=True)
     teams = TeamsSerializer(read_only=True, many=True)
-    # opportunity_attachment = AttachmentsSerializer(read_only=True, many=True)
-    opportunity_attachment = AttachmentsSerializer(
-        # source='opportunity_attachment',  # Указываем related_name из модели Attachments
-        many=True,
-        read_only=True
-    )
+    meeting_date = serializers.DateField()
+    attachment_links = serializers.JSONField()
+    days_to_close = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
+    opportunity_attachment = AttachmentsSerializer(many=True, read_only=True)
+
     class Meta:
         model = Opportunity
-        # fields = ‘__all__’
         fields = (
             "id",
             "name",
@@ -53,12 +75,38 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "teams",
             "created_on_arrow",
             "account",
-            # "get_team_users",
-            # "get_team_and_assigned_users",
-            # "get_assigned_users_not_in_teams",
             "expected_revenue",
             "expected_close_date",
+            "meeting_date",
+            "attachment_links",
+            "days_to_close",
+            "company",
+            "contact",
+            "company_name"
         )
+
+    def get_days_to_close(self, obj):
+        if obj.expected_close_date and obj.created_at:
+            return (obj.expected_close_date - obj.created_at.date()).days
+        return None
+
+    def get_company(self, obj):
+        if hasattr(obj, 'lead') and obj.lead and obj.lead.company:
+            from companies.serializer import CompanyListSerializer
+            return CompanyListSerializer(obj.lead.company).data
+        elif hasattr(obj, 'account') and obj.account and hasattr(obj.account, 'company') and obj.account.company:
+            from companies.serializer import CompanyListSerializer
+            return CompanyListSerializer(obj.account.company).data
+        return None
+
+    def get_contact(self, obj):
+        if hasattr(obj, 'lead') and obj.lead and obj.lead.contact:
+            from contacts.serializer import ContactSerializer
+            return ContactSerializer(obj.lead.contact).data
+        elif obj.contacts.exists():
+            from contacts.serializer import ContactSerializer
+            return ContactSerializer(obj.contacts.first()).data
+        return None
 
 
 class OpportunityCreateSerializer(serializers.ModelSerializer):
@@ -108,7 +156,7 @@ class OpportunityCreateSerializer(serializers.ModelSerializer):
             "created_at",
             "is_active",
             "created_on_arrow",
-            "org"
+            "org",
             # "get_team_users",
             # "get_team_and_assigned_users",
             # "get_assigned_users_not_in_teams",
