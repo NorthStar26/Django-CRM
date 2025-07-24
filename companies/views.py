@@ -15,21 +15,24 @@ from .serializer import (
     CompanyCreateUpdateSerializer,
     CompanySwaggerCreateSerializer,
     CompanySwaggerListSerializer,
-    CompanyLogoUpdateSerializer
+    CompanyLogoUpdateSerializer,
 )
 from .swagger_params1 import company_list_get_params, company_auth_headers
+
+
 def format_serializer_errors(serializer_errors):
     """Преобразует ошибки serializer в читаемый формат"""
     if isinstance(serializer_errors, dict):
         formatted_errors = []
         for field, errors in serializer_errors.items():
-            if field == 'non_field_errors':
+            if field == "non_field_errors":
                 formatted_errors.extend([str(error) for error in errors])
             else:
                 field_errors = [f"{field}: {str(error)}" for error in errors]
                 formatted_errors.extend(field_errors)
         return "; ".join(formatted_errors) if formatted_errors else "Validation failed"
     return str(serializer_errors)
+
 
 @extend_schema_view(
     get=extend_schema(
@@ -39,8 +42,8 @@ def format_serializer_errors(serializer_errors):
         responses={
             200: CompanySwaggerListSerializer(many=True),
             401: {"description": "Unauthorized"},
-            403: {"description": "Forbidden"}
-        }
+            403: {"description": "Forbidden"},
+        },
     ),
     post=extend_schema(
         tags=["Companies"],
@@ -51,42 +54,39 @@ def format_serializer_errors(serializer_errors):
             200: CompanyDetailSerializer,
             400: {"description": "Bad Request"},
             401: {"description": "Unauthorized"},
-            403: {"description": "Forbidden"}
-        }
-    )
+            403: {"description": "Forbidden"},
+        },
+    ),
 )
-
-
-
-
 class CompanyListView(APIView):
     permission_classes = (IsAuthenticated,)
 
-    @extend_schema(tags=["Companies"], parameters=company_list_get_params + company_auth_headers)
+    @extend_schema(
+        tags=["Companies"], parameters=company_list_get_params + company_auth_headers
+    )
     def get(self, request, *args, **kwargs):
         """Get a list of companies with filtering"""
         try:
             print(f"Getting companies for user: {request.user}")
             print(f"Request profile: {getattr(request, 'profile', 'Not found')}")
 
-
             companies = CompanyProfile.objects.filter(org=request.profile.org)
-            name_search = request.query_params.get('name', None)
+            name_search = request.query_params.get("name", None)
             if name_search:
                 companies = companies.filter(name__icontains=name_search)
                 print(f"Searching by name: {name_search}")
 
-            country_filter = request.query_params.get('billing_country', None)
+            country_filter = request.query_params.get("billing_country", None)
             if country_filter:
                 companies = companies.filter(billing_country=country_filter)
                 print(f"Filtering by country: {country_filter}")
 
-            industry_filter = request.query_params.get('industry', None)
+            industry_filter = request.query_params.get("industry", None)
             if industry_filter:
                 companies = companies.filter(industry=industry_filter)
                 print(f"Filtering by industry: {industry_filter}")
 
-            companies = companies.order_by('-created_at')
+            companies = companies.order_by("-created_at")
 
             serializer = CompanyListSerializer(companies, many=True)
             return Response(
@@ -95,18 +95,19 @@ class CompanyListView(APIView):
             )
         except Exception as e:
             import traceback
+
             print(f"Error getting companies: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
-                    {"error": True, "message": f"Error getting companies: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                {"error": True, "message": f"Error getting companies: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
         tags=["Companies"],
         description="Company Create",
         parameters=company_auth_headers,
-        request=CompanySwaggerCreateSerializer
+        request=CompanySwaggerCreateSerializer,
     )
     def post(self, request, *args, **kwargs):
         """Create a new company in the organization"""
@@ -114,38 +115,36 @@ class CompanyListView(APIView):
             print(f"Creating company with data: {request.data}")
             print(f"Request user: {request.user}")
             print(f"Request profile: {getattr(request, 'profile', 'Not found')}")
-            print(f"Request profile org: {getattr(request.profile, 'org', 'Not found') if hasattr(request, 'profile') else 'No profile'}")
+            print(
+                f"Request profile org: {getattr(request.profile, 'org', 'Not found') if hasattr(request, 'profile') else 'No profile'}"
+            )
 
             # Check if the request data contains a name
-            if not request.data.get('name'):
+            if not request.data.get("name"):
                 return Response(
                     {"error": True, "message": "Company name is required"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Check if the user has a valid profile and organization
-            if not hasattr(request, 'profile') or not request.profile.org:
+            if not hasattr(request, "profile") or not request.profile.org:
                 return Response(
                     {"error": True, "message": "Organization is missing or invalid"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            #Validate the request data using the serializer
+            # Validate the request data using the serializer
             company = CompanyCreateUpdateSerializer(
-                data=request.data,
-                context={'request': request}
+                data=request.data, context={"request": request}
             )
 
-
             if not company.is_valid():
-                error_details = {k: [str(e) for e in v] for k, v in company.errors.items()}
+                error_details = {
+                    k: [str(e) for e in v] for k, v in company.errors.items()
+                }
                 error_message = format_serializer_errors(company.errors)
                 return Response(
-                    {
-                        "error": True,
-                        "message": error_message,
-                        "details": error_details
-                    },
+                    {"error": True, "message": error_message, "details": error_details},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -158,7 +157,7 @@ class CompanyListView(APIView):
                     {
                         "error": True,
                         "message": "Validation error",
-                        "details": error_details
+                        "details": error_details,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -167,21 +166,29 @@ class CompanyListView(APIView):
                 {
                     "error": False,
                     "message": "Company created successfully",
-                    "data": CompanyDetailSerializer(company_instance).data
+                    "data": CompanyDetailSerializer(company_instance).data,
                 },
                 status=status.HTTP_201_CREATED,
             )
 
         except IntegrityError as e:
             # Handle unique constraint violations
-            error_message = "A company with this information already exists in your organization"
+            error_message = (
+                "A company with this information already exists in your organization"
+            )
 
             if "name" in str(e).lower():
-                error_message = "Company with this name already exists in your organization"
+                error_message = (
+                    "Company with this name already exists in your organization"
+                )
             elif "email" in str(e).lower():
-                error_message = "Company with this email already exists in your organization"
+                error_message = (
+                    "Company with this email already exists in your organization"
+                )
             elif "website" in str(e).lower():
-                error_message = "Company with this website already exists in your organization"
+                error_message = (
+                    "Company with this website already exists in your organization"
+                )
 
             return Response(
                 {"error": True, "message": error_message},
@@ -190,7 +197,7 @@ class CompanyListView(APIView):
 
         except ValidationError as e:
             error_message = str(e)
-            if hasattr(e, 'message_dict'):
+            if hasattr(e, "message_dict"):
                 error_message = format_serializer_errors(e.message_dict)
 
             return Response(
@@ -200,6 +207,7 @@ class CompanyListView(APIView):
 
         except Exception as e:
             import traceback
+
             print(f"Unexpected error creating company: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
@@ -208,15 +216,14 @@ class CompanyListView(APIView):
             )
 
 
-
 @extend_schema_view(
     get=extend_schema(
         tags=["Companies"],
         parameters=company_auth_headers,
         responses={
             200: CompanyDetailSerializer,
-            404: {"description": "Company not found"}
-        }
+            404: {"description": "Company not found"},
+        },
     ),
     patch=extend_schema(
         tags=["Companies"],
@@ -225,17 +232,17 @@ class CompanyListView(APIView):
         responses={
             200: CompanyDetailSerializer,
             400: {"description": "Bad Request"},
-            404: {"description": "Company not found"}
-        }
+            404: {"description": "Company not found"},
+        },
     ),
     delete=extend_schema(
         tags=["Companies"],
         parameters=company_auth_headers,
         responses={
             200: {"description": "Company deleted successfully"},
-            404: {"description": "Company not found"}
-        }
-    )
+            404: {"description": "Company not found"},
+        },
+    ),
 )
 class CompanyDetailView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -254,7 +261,10 @@ class CompanyDetailView(APIView):
 
         if company.org != request.profile.org:
             return Response(
-                {"error": True, "message": "User company doesnot match with header...."},
+                {
+                    "error": True,
+                    "message": "User company doesnot match with header....",
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -267,7 +277,7 @@ class CompanyDetailView(APIView):
     @extend_schema(
         tags=["Companies"],
         parameters=company_auth_headers,
-        request=CompanySwaggerCreateSerializer
+        request=CompanySwaggerCreateSerializer,
     )
     def patch(self, request, pk, format=None):
         """Partial update company"""
@@ -275,46 +285,78 @@ class CompanyDetailView(APIView):
 
         if company.org != request.profile.org:
             return Response(
-                {"error": True, "message": "User company doesnot match with header...."},
+                {
+                    "error": True,
+                    "message": "User company doesnot match with header....",
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Role-based permission check for company updates
+        if request.profile.role == "USER":
+            # Users can only update companies they created
+            if company.created_by != request.profile.user:
+                return Response(
+                    {
+                        "error": True,
+                        "message": "You do not have permission to update this company",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        # Admin and Manager can update any company (no additional check needed)
+
         serializer = CompanyCreateUpdateSerializer(
-            company,
-            data=request.data,
-            partial=True,
-            context={'request': request}
+            company, data=request.data, partial=True, context={"request": request}
         )
         if serializer.is_valid():
             updated_company = serializer.save()
             return Response(
-                {"error": False, "data": CompanyDetailSerializer(updated_company).data, 'message': 'Updated Successfully'},
+                {
+                    "error": False,
+                    "data": CompanyDetailSerializer(updated_company).data,
+                    "message": "Updated Successfully",
+                },
                 status=status.HTTP_200_OK,
             )
         error_message = format_serializer_errors(serializer.errors)
         return Response(
-            {"error": True, 'message': error_message},
+            {"error": True, "message": error_message},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
 
     @extend_schema(tags=["Companies"], parameters=company_auth_headers)
     def delete(self, request, pk, format=None):
         """Delete company"""
         company = self.get_object(pk)
 
-
         if company.org != request.profile.org:
             return Response(
-                {"error": True, "message": "User company doesnot match with header...."},
+                {
+                    "error": True,
+                    "message": "User company doesnot match with header....",
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Role-based permission check for company deletion
+        if request.profile.role == "USER":
+            # Users can only delete companies they created
+            if company.created_by != request.profile.user:
+                return Response(
+                    {
+                        "error": True,
+                        "message": "You do not have permission to delete this company",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        # Admin and Manager can delete any company (no additional check needed)
+
         company.delete()
         return Response(
-            {"error": False, 'message': 'Company deleted successfully'},
+            {"error": False, "message": "Company deleted successfully"},
             status=status.HTTP_200_OK,
         )
+
 
 @extend_schema_view(
     put=extend_schema(
@@ -325,8 +367,8 @@ class CompanyDetailView(APIView):
         responses={
             200: {"description": "Logo updated successfully"},
             400: {"description": "Invalid logo URL"},
-            404: {"description": "Company not found"}
-        }
+            404: {"description": "Company not found"},
+        },
     )
 )
 class CompanyLogoUploadView(APIView):
@@ -338,14 +380,17 @@ class CompanyLogoUploadView(APIView):
         except CompanyProfile.DoesNotExist:
             return Response(
                 {"error": True, "message": "Company not found"},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         # Check organization match
         if company.org != request.profile.org:
             return Response(
-                {"error": True, "message": "Access denied: company does not belong to your organization"},
-                status=status.HTTP_403_FORBIDDEN
+                {
+                    "error": True,
+                    "message": "Access denied: company does not belong to your organization",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         # ✅ FIXED: add partial=True
@@ -357,10 +402,10 @@ class CompanyLogoUploadView(APIView):
             serializer.save()
             return Response(
                 {"error": False, "message": "Logo updated successfully"},
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         return Response(
             {"error": True, "message": "Invalid input", "details": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )

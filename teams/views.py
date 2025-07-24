@@ -55,7 +55,7 @@ class TeamsListView(APIView, LimitOffsetPagination):
         tags=["Teams"], parameters=swagger_params1.teams_list_get_params
     )
     def get(self, *args, **kwargs):
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             return Response(
                 {
                     "error": True,
@@ -70,7 +70,7 @@ class TeamsListView(APIView, LimitOffsetPagination):
         tags=["Teams"], request=TeamswaggerCreateSerializer,parameters=swagger_params1.organization_params
     )
     def post(self, request, *args, **kwargs):
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             return Response(
                 {
                     "error": True,
@@ -113,7 +113,7 @@ class TeamsDetailView(APIView):
         tags=["Teams"], parameters=swagger_params1.organization_params
     )
     def get(self, request, pk, **kwargs):
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             return Response(
                 {
                     "error": True,
@@ -130,7 +130,7 @@ class TeamsDetailView(APIView):
         tags=["Teams"], request=TeamswaggerCreateSerializer,parameters=swagger_params1.organization_params
     )
     def put(self, request, pk, *args, **kwargs):
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             return Response(
                 {
                     "error": True,
@@ -175,7 +175,7 @@ class TeamsDetailView(APIView):
         tags=["Teams"], parameters=swagger_params1.organization_params
     )
     def delete(self, request, pk, **kwargs):
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             return Response(
                 {
                     "error": True,

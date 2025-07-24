@@ -65,7 +65,7 @@ class AccountsListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
             ).distinct()
@@ -237,7 +237,7 @@ class AccountDetailView(APIView):
 
         if serializer.is_valid():
             if (
-                self.request.profile.role != "ADMIN"
+                self.request.profile.role not in ["ADMIN", "MANAGER"]
                 and not self.request.profile.is_admin
             ):
                 if not (
@@ -323,7 +323,7 @@ class AccountDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile != self.object.created_by:
                 return Response(
                     {
@@ -348,7 +348,7 @@ class AccountDetailView(APIView):
             )
         context = {}
         context["account_obj"] = AccountSerializer(self.account).data
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.account.created_by)
                 or (self.request.profile in self.account.assigned_to.all())
@@ -365,11 +365,11 @@ class AccountDetailView(APIView):
         if (
             self.request.profile == self.account.created_by
             or self.request.profile.is_admin
-            or self.request.profile.role == "ADMIN"
+            or self.request.profile.role in ["ADMIN", "MANAGER"]
         ):
             comment_permission = True
 
-        if self.request.profile.is_admin or self.request.profile.role == "ADMIN":
+        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
             users_mention = list(
                 Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
                     "user__email"
@@ -450,7 +450,7 @@ class AccountDetailView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.account_obj.created_by)
                 or (self.request.profile in self.account_obj.assigned_to.all())
@@ -510,7 +510,7 @@ class AccountCommentView(APIView):
         data = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == obj.commented_by
         ):
@@ -538,7 +538,7 @@ class AccountCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.commented_by
         ):
@@ -566,7 +566,7 @@ class AccountAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):

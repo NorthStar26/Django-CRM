@@ -55,7 +55,7 @@ class ContactsListView(APIView, LimitOffsetPagination):
 
         context = {}
         # Remove the restrictive filter - all users in the organization should see all contacts
-        # if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        # if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
         #     queryset = queryset.filter(
         #         Q(assigned_to__in=[self.request.profile])
         #         | Q(created_by=self.request.profile.user)
@@ -214,15 +214,15 @@ class ContactsListView(APIView, LimitOffsetPagination):
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        if request.profile.role != "ADMIN" and not request.profile.is_admin:
-            if not request.profile.is_active:
-                return Response(
-                    {
-                        "error": True,
-                        "errors": "You do not have Permission to perform this action",
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        # All authenticated users can create contacts
+        if not request.profile.is_active:
+            return Response(
+                {
+                    "error": True,
+                    "errors": "You do not have Permission to perform this action",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not request.profile.org:
             return Response(
                 {"error": True, "errors": "Organization not found"},
@@ -302,7 +302,10 @@ class ContactDetailView(APIView):
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        if request.profile.role != "ADMIN" and not request.profile.is_admin:
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.profile.is_admin
+        ):
             if not request.profile.is_active:
                 return Response(
                     {
@@ -324,8 +327,10 @@ class ContactDetailView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            if request.profile.role != "ADMIN" and not request.profile.is_admin:
-                if request.profile != contact_obj.created_by:
+            # Role-based permission check for contact updates
+            if request.profile.role == "USER":
+                # Users can only update contacts they created
+                if contact_obj.created_by != request.profile.user:
                     return Response(
                         {
                             "error": True,
@@ -333,6 +338,7 @@ class ContactDetailView(APIView):
                         },
                         status=status.HTTP_403_FORBIDDEN,
                     )
+            # Admin and Manager can update any contact (no additional check needed)
 
             contact_serializer = CreateContactSerializer(
                 data=params,
@@ -404,15 +410,8 @@ class ContactDetailView(APIView):
                     {"error": True, "errors": "Contact not found in your organization"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            if request.profile.role != "ADMIN" and not request.profile.is_admin:
-                if request.profile != contact_obj.created_by:
-                    return Response(
-                        {
-                            "error": True,
-                            "errors": "You do not have Permission to view this contact",
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+            # All users can view all contacts in their organization (shared visibility)
+            # No additional permission check needed
             contact_data = ContactBasicSerializer(contact_obj).data
 
             context = {"error": False, "contact": contact_data}
@@ -446,8 +445,10 @@ class ContactDetailView(APIView):
                     {"error": True, "errors": "Contact not found in your organization"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            if request.profile.role != "ADMIN" and not request.profile.is_admin:
-                if request.profile != contact_obj.created_by:
+            # Role-based permission check for contact deletion
+            if request.profile.role == "USER":
+                # Users can only delete contacts they created
+                if contact_obj.created_by != request.profile.user:
                     return Response(
                         {
                             "error": True,
@@ -455,6 +456,7 @@ class ContactDetailView(APIView):
                         },
                         status=status.HTTP_403_FORBIDDEN,
                     )
+            # Admin and Manager can delete any contact (no additional check needed)
 
             contact_obj.delete()
 
@@ -486,7 +488,10 @@ class ContactDetailView(APIView):
         params = request.data
         context = {}
         self.contact_obj = Contact.objects.get(pk=pk)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             if not (
                 (self.request.profile == self.contact_obj.created_by)
                 or (self.request.profile in self.contact_obj.assigned_to.all())
@@ -548,7 +553,7 @@ class ContactCommentView(APIView):
         params = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == obj.commented_by
         ):
@@ -575,7 +580,7 @@ class ContactCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.commented_by
         ):
@@ -602,7 +607,7 @@ class ContactAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):

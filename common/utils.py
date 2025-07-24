@@ -44,33 +44,20 @@ def jwt_payload_handler(user):
 PIPELINE_CONFIG = {
     "QUALIFICATION": {
         "editable_fields": [],  # Этап уже пройден
-        "next_stage": "IDENTIFY_DECISION_MAKERS"
+        "next_stage": "IDENTIFY_DECISION_MAKERS",
     },
     "IDENTIFY_DECISION_MAKERS": {
         "editable_fields": ["meeting_date"],
-        "next_stage": "PROPOSAL"
+        "next_stage": "PROPOSAL",
     },
-    "PROPOSAL": {
-        "editable_fields": ["attachment_links"],
-        "next_stage": "NEGOTIATION"
-    },
-    "NEGOTIATION": {
-        "editable_fields": ["feedback"],
-        "next_stage": "CLOSE"
-    },
+    "PROPOSAL": {"editable_fields": ["attachment_links"], "next_stage": "NEGOTIATION"},
+    "NEGOTIATION": {"editable_fields": ["feedback"], "next_stage": "CLOSE"},
     "CLOSE": {
         "editable_fields": ["close_option"],  #  Won/Lost
-        "next_stage": None  # Dipends on close_option
+        "next_stage": None,  # Dipends on close_option
     },
-    "CLOSED LOST": {
-        "editable_fields": ["reason"],
-        "next_stage": None
-    },
-    "CLOSED WON": {
-        "editable_fields": ["contract_attachment"],
-        "next_stage": None
-    }
-
+    "CLOSED LOST": {"editable_fields": ["reason"], "next_stage": None},
+    "CLOSED WON": {"editable_fields": ["contract_attachment"], "next_stage": None},
 }
 INDCHOICES = (
     ("ADVERTISING", "ADVERTISING"),
@@ -114,6 +101,7 @@ TYPECHOICES = (
 
 ROLES = (
     ("ADMIN", "ADMIN"),
+    ("MANAGER", "MANAGER"),
     ("USER", "USER"),
 )
 
@@ -159,7 +147,7 @@ STAGES = (
     ("IDENTIFY_DECISION_MAKERS", "Identify Decision Makers"),
     ("PROPOSAL", "Proposal"),
     ("NEGOTIATION", "Negotiation"),
-      ("CLOSE", "Close"),
+    ("CLOSE", "Close"),
     ("CLOSED WON", "CLOSED WON"),
     ("CLOSED LOST", "CLOSED LOST"),
 )
