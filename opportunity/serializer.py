@@ -12,6 +12,7 @@ from common.utils import PIPELINE_CONFIG
 from common.models import Attachments
 from companies.serializer import CompanyListSerializer
 
+
 class TagsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tags
@@ -22,11 +23,7 @@ from rest_framework import serializers
 from opportunity.models import Opportunity
 from accounts.models import Tags
 from accounts.serializer import AccountSerializer
-from common.serializer import (
-    AttachmentsSerializer,
-    ProfileSerializer,
-    UserSerializer
-)
+from common.serializer import AttachmentsSerializer, ProfileSerializer, UserSerializer
 from contacts.serializer import ContactSerializer
 from teams.serializer import TeamsSerializer
 
@@ -51,6 +48,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
     company = serializers.SerializerMethodField()
     contact = serializers.SerializerMethodField()
     opportunity_attachment = AttachmentsSerializer(many=True, read_only=True)
+    lead = serializers.SerializerMethodField()
 
     class Meta:
         model = Opportunity
@@ -82,7 +80,8 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "days_to_close",
             "company",
             "contact",
-            "company_name"
+            "company_name",
+            "lead",
         )
 
     def get_days_to_close(self, obj):
@@ -91,21 +90,37 @@ class OpportunitySerializer(serializers.ModelSerializer):
         return None
 
     def get_company(self, obj):
-        if hasattr(obj, 'lead') and obj.lead and obj.lead.company:
+        if hasattr(obj, "lead") and obj.lead and obj.lead.company:
             from companies.serializer import CompanyListSerializer
+
             return CompanyListSerializer(obj.lead.company).data
-        elif hasattr(obj, 'account') and obj.account and hasattr(obj.account, 'company') and obj.account.company:
+        elif (
+            hasattr(obj, "account")
+            and obj.account
+            and hasattr(obj.account, "company")
+            and obj.account.company
+        ):
             from companies.serializer import CompanyListSerializer
+
             return CompanyListSerializer(obj.account.company).data
         return None
 
     def get_contact(self, obj):
-        if hasattr(obj, 'lead') and obj.lead and obj.lead.contact:
+        if hasattr(obj, "lead") and obj.lead and obj.lead.contact:
             from contacts.serializer import ContactSerializer
+
             return ContactSerializer(obj.lead.contact).data
         elif obj.contacts.exists():
             from contacts.serializer import ContactSerializer
+
             return ContactSerializer(obj.contacts.first()).data
+        return None
+
+    def get_lead(self, obj):
+        if hasattr(obj, "lead") and obj.lead:
+            from leads.serializer import LeadSerializer
+
+            return LeadSerializer(obj.lead).data
         return None
 
 
