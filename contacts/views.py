@@ -17,7 +17,8 @@ from common.serializer import (
 )
 from common.utils import COUNTRIES
 from contacts.models import Contact, SALUTATION_CHOICES, LANGUAGE_CHOICES
-#from common.external_auth import CustomDualAuthentication
+
+# from common.external_auth import CustomDualAuthentication
 from contacts import swagger_params1
 from contacts.serializer import *
 from contacts.tasks import send_email_to_assigned_user
@@ -26,9 +27,10 @@ from teams.models import Teams
 from companies.models import CompanyProfile
 from contacts.serializer import ContactBasicSerializer
 
+
 def format_serializer_errors(errors):
     """
-   Converts serializer errors to a string for message.
+    Converts serializer errors to a string for message.
     """
     messages = []
     for field, errs in errors.items():
@@ -38,27 +40,32 @@ def format_serializer_errors(errors):
         else:
             messages.append(f"{field}: {errs}")
     return "; ".join(messages)
+
+
 class ContactsListView(APIView, LimitOffsetPagination):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Contact
 
     def get_context_data(self, **kwargs):
         params = self.request.query_params
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
+        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
+            "-id"
+        )
 
         context = {}
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
-            queryset = queryset.filter(
-                Q(assigned_to__in=[self.request.profile])
-                | Q(created_by=self.request.profile)
-            ).distinct()
-# Applying filters from request parameters
+        # Remove the restrictive filter - all users in the organization should see all contacts
+        # if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        #     queryset = queryset.filter(
+        #         Q(assigned_to__in=[self.request.profile])
+        #         | Q(created_by=self.request.profile.user)
+        #     ).distinct()
+        # Applying filters from request parameters
         if params:
             if params.get("name"):
                 queryset = queryset.filter(
-                    Q(first_name__icontains=params.get("name")) |
-                    Q(last_name__icontains=params.get("name"))
+                    Q(first_name__icontains=params.get("name"))
+                    | Q(last_name__icontains=params.get("name"))
                 )
             if params.get("city"):
                 queryset = queryset.filter(address__city__icontains=params.get("city"))
@@ -71,14 +78,18 @@ class ContactsListView(APIView, LimitOffsetPagination):
                 print(f"Filtering by company: {params.get('company')}")
                 print(f"Contacts found: {queryset.count()}")
             if params.get("company_name"):
-                queryset = queryset.filter(company__name__icontains=params.get("company_name"))
+                queryset = queryset.filter(
+                    company__name__icontains=params.get("company_name")
+                )
                 print(f"Filtering by company name: {params.get('company_name')}")
                 print(f"Contacts found: {queryset.count()}")
             #     queryset = queryset.filter(
             #         assigned_to__id__in=params.get("assigned_to")
             #     ).distinct()
             if params.get("department"):
-                queryset = queryset.filter(department__icontains=params.get("department"))
+                queryset = queryset.filter(
+                    department__icontains=params.get("department")
+                )
                 print(f"Filtering by department: {params.get('department')}")
                 print(f"Contacts found: {queryset.count()}")
                 context["selected_department"] = params.get("department")
@@ -93,9 +104,6 @@ class ContactsListView(APIView, LimitOffsetPagination):
                     queryset = queryset.order_by("department")
             else:
                 queryset = queryset.order_by(sort_field if sort_field else "-id")
-
-
-
 
         results_contact = self.paginate_queryset(
             queryset.distinct(), self.request, view=self
@@ -113,18 +121,18 @@ class ContactsListView(APIView, LimitOffsetPagination):
         context.update({"contacts_count": self.count, "offset": offset})
         context["contact_obj_list"] = contacts
 
-# Add users for filters and drop-down lists
-#         users = Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-#             "id", "user__email"
-#         )
-#         context["users"] = users
+        # Add users for filters and drop-down lists
+        #         users = Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
+        #             "id", "user__email"
+        #         )
+        #         context["users"] = users
 
-# Add companies for filters
+        # Add companies for filters
         companies = CompanyProfile.objects.filter(org=self.request.profile.org).values(
             "id", "name"
         )
         context["companies"] = companies
-            # Add unique job titles for filters
+        # Add unique job titles for filters
         job_titles = (
             self.model.objects.filter(org=self.request.profile.org)
             .exclude(title__isnull=True)
@@ -134,14 +142,14 @@ class ContactsListView(APIView, LimitOffsetPagination):
         )
         context["job_titles"] = list(job_titles)
 
-        departments= (
-                self.model.objects.filter(org=self.request.profile.org)
-                .exclude(department__isnull=True)
-                .exclude(department__exact="")
-                .values_list("department", flat=True)
-                .distinct()
-                .order_by("department")
-            )
+        departments = (
+            self.model.objects.filter(org=self.request.profile.org)
+            .exclude(department__isnull=True)
+            .exclude(department__exact="")
+            .values_list("department", flat=True)
+            .distinct()
+            .order_by("department")
+        )
         context["departments"] = list(departments)
 
         return context
@@ -152,7 +160,7 @@ class ContactsListView(APIView, LimitOffsetPagination):
     def get(self, request, *args, **kwargs):
         """Getting a list of contacts with filtering by companies and other parameters"""
 
-        if not hasattr(request, 'profile') or not request.profile:
+        if not hasattr(request, "profile") or not request.profile:
             return Response(
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -175,17 +183,17 @@ class ContactsListView(APIView, LimitOffsetPagination):
             )
 
         try:
-      # Getting context data taking into account all filters
+            # Getting context data taking into account all filters
             context = self.get_context_data(**kwargs)
 
             #  Forming the response structure to match the rest of the API
-            return Response({
-                "error": False,
-                "data": context
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {"error": False, "data": context}, status=status.HTTP_200_OK
+            )
 
         except Exception as e:
             import traceback
+
             print(f"Error getting contacts: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
@@ -193,19 +201,15 @@ class ContactsListView(APIView, LimitOffsetPagination):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
-
-
-
     @extend_schema(
         tags=["contacts"],
         parameters=swagger_params1.organization_params,
-        request=CreateContactSerializer
+        request=CreateContactSerializer,
     )
-    def post(self, request, *args, **kwargs): ##new version ##
+    def post(self, request, *args, **kwargs):  ##new version ##
         params = request.data
 
-        if not hasattr(request, 'profile') or not request.profile:
+        if not hasattr(request, "profile") or not request.profile:
             return Response(
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -228,17 +232,19 @@ class ContactsListView(APIView, LimitOffsetPagination):
         contact_serializer = CreateContactSerializer(
             data=params,
             request_obj=request,
-            context={'request': request}  # Add context to the serializer
-            )
+            context={"request": request},  # Add context to the serializer
+        )
 
         if not contact_serializer.is_valid():
-            error_details = {k: [str(e) for e in v] for k, v in contact_serializer.errors.items()}
+            error_details = {
+                k: [str(e) for e in v] for k, v in contact_serializer.errors.items()
+            }
             error_message = format_serializer_errors(contact_serializer.errors)
             return Response(
                 {
                     "error": True,
                     "message": error_message or "Validation error",
-                    "details": error_details
+                    "details": error_details,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -255,23 +261,24 @@ class ContactsListView(APIView, LimitOffsetPagination):
             print(f"Is active: {contact_obj.is_active}")
 
             return Response(
-            {
-                "error": False,
-                "message": "Contact created successfully",
-                "contact_id": str(contact_obj.id),
-            },
-            status=status.HTTP_201_CREATED,
-        )
-
+                {
+                    "error": False,
+                    "message": "Contact created successfully",
+                    "contact_id": str(contact_obj.id),
+                },
+                status=status.HTTP_201_CREATED,
+            )
 
         except Exception as e:
             import traceback
+
             print(f"Error creating contact: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
                 {"error": True, "errors": f"Failed to create contact: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 class ContactDetailView(APIView):
     # #authentication_classes = (CustomDualAuthentication,)
@@ -284,13 +291,13 @@ class ContactDetailView(APIView):
     @extend_schema(
         tags=["contacts"],
         parameters=swagger_params1.organization_params,
-        request=CreateContactSerializer
+        request=CreateContactSerializer,
     )
     def patch(self, request, pk, format=None):  # new version - partial update
         """Partially update a specific contact by ID"""
 
         params = request.data
-        if not hasattr(request, 'profile') or not request.profile:
+        if not hasattr(request, "profile") or not request.profile:
             return Response(
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -331,17 +338,19 @@ class ContactDetailView(APIView):
                 data=params,
                 instance=contact_obj,
                 request_obj=request,
-                context={'request': request},
-                partial=True
+                context={"request": request},
+                partial=True,
             )
             if not contact_serializer.is_valid():
-                error_details = {k: [str(e) for e in v] for k, v in contact_serializer.errors.items()}
+                error_details = {
+                    k: [str(e) for e in v] for k, v in contact_serializer.errors.items()
+                }
                 error_message = format_serializer_errors(contact_serializer.errors)
                 return Response(
                     {
                         "error": True,
                         "message": error_message or "Validation error",
-                        "details": error_details
+                        "details": error_details,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -357,7 +366,7 @@ class ContactDetailView(APIView):
                     "error": False,
                     "message": "Contact updated successfully",
                     "contact_id": str(updated_contact.id),
-                    "updated_contact": updated_data
+                    "updated_contact": updated_data,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -369,6 +378,7 @@ class ContactDetailView(APIView):
             )
         except Exception as e:
             import traceback
+
             print(f"Error updating contact: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
@@ -376,14 +386,11 @@ class ContactDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        tags=["contacts"],
-        parameters=swagger_params1.organization_params
-)
+    @extend_schema(tags=["contacts"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):  # New version Get by id
         """Get a specific contact by ID"""
 
-        if not hasattr(request, 'profile') or not request.profile:
+        if not hasattr(request, "profile") or not request.profile:
             return Response(
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -408,10 +415,7 @@ class ContactDetailView(APIView):
                     )
             contact_data = ContactBasicSerializer(contact_obj).data
 
-            context = {
-                "error": False,
-                "contact": contact_data
-            }
+            context = {"error": False, "contact": contact_data}
 
             return Response(context, status=status.HTTP_200_OK)
 
@@ -426,13 +430,10 @@ class ContactDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @extend_schema(
-        tags=["contacts"],
-        parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["contacts"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):  # NEW version
         """Delete a specific contact by ID"""
-        if not hasattr(request, 'profile') or not request.profile:
+        if not hasattr(request, "profile") or not request.profile:
             return Response(
                 {"error": True, "errors": "Profile not found"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -477,7 +478,9 @@ class ContactDetailView(APIView):
             )
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params,request=ContactDetailEditSwaggerSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=ContactDetailEditSwaggerSerializer,
     )
     def post(self, request, pk, **kwargs):
         params = request.data
@@ -537,7 +540,9 @@ class ContactCommentView(APIView):
         return self.model.objects.get(pk=pk)
 
     @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params,request=ContactCommentEditSwaggerSerializer
+        tags=["contacts"],
+        parameters=swagger_params1.organization_params,
+        request=ContactCommentEditSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         params = request.data
@@ -566,9 +571,7 @@ class ContactCommentView(APIView):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["contacts"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
@@ -595,9 +598,7 @@ class ContactAttachmentView(APIView):
     # #authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
-    @extend_schema(
-        tags=["contacts"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["contacts"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
