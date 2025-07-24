@@ -87,6 +87,7 @@ class ContactBasicSerializer(serializers.ModelSerializer):
     language_display = serializers.SerializerMethodField()
     country_name = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
+    created_by = ProfileSerializer(read_only=True)
 
     def get_salutation_display(self, obj):
         return obj.get_salutation_display() if obj.salutation else None
@@ -128,6 +129,8 @@ class ContactBasicSerializer(serializers.ModelSerializer):
             'company_name',
             'country',
             'country_name',
+            'created_by',
+            'created_at',
         )
 
 
