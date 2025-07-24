@@ -56,7 +56,7 @@ class LeadListView(APIView, LimitOffsetPagination):
         params = self.request.query_params
         queryset = (
             self.model.objects.filter(
-                organization=self.request.profile.org
+                organization=self.request.profile.org, converted=False
             )  # Updated from org to organization
             .exclude(status="converted")
             .select_related("created_by", "contact", "company")
