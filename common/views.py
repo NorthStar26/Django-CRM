@@ -199,6 +199,14 @@ class UsersListView(APIView, LimitOffsetPagination):
         #         status=status.HTTP_403_FORBIDDEN,
         #     )
         queryset = Profile.objects.filter(org=request.profile.org).order_by("-id")
+
+        # For normal users (not ADMIN/MANAGER), only show their own profile
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            queryset = queryset.filter(id=self.request.profile.id)
+
         params = request.query_params
         if params:
             if params.get("email"):
@@ -766,7 +774,7 @@ class DocumentDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(
@@ -810,7 +818,7 @@ class DocumentDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if (
-                self.request.profile != document.created_by
+                self.request.profile.user != document.created_by
             ):  # or (self.request.profile not in document.shared_to.all()):
                 return Response(
                     {
@@ -848,7 +856,7 @@ class DocumentDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(

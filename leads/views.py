@@ -347,25 +347,6 @@ class LeadDetailView(APIView):
 
     def get_context_data(self, **kwargs):
         context = {}
-        # Handle assigned_to as a ForeignKey instead of ManyToMany
-        user_assgn_list = []
-        if self.lead_obj.assigned_to:
-            user_assgn_list.append(self.lead_obj.assigned_to.id)
-
-        if self.request.profile.user == self.lead_obj.created_by:
-            user_assgn_list.append(self.request.profile.user)
-        if (
-            self.request.profile.role not in ["ADMIN", "MANAGER"]
-            and not self.request.user.is_superuser
-        ):
-            if self.request.profile.id not in user_assgn_list:
-                return Response(
-                    {
-                        "error": True,
-                        "errors": "You do not have Permission to perform this action",
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         comments = Comment.objects.filter(lead=self.lead_obj).order_by("-id")
         attachments = Attachments.objects.filter(lead=self.lead_obj).order_by("-id")
@@ -387,7 +368,7 @@ class LeadDetailView(APIView):
                 ).values("user__email")
             )
         elif self.request.profile.user != self.lead_obj.created_by:
-            users_mention = [{"username": self.lead_obj.created_by.username}]
+            users_mention = [{"user__email": self.lead_obj.created_by.email}]
         else:
             # Handle assigned_to as a single object
             users_mention = []
@@ -464,8 +445,28 @@ class LeadDetailView(APIView):
     )
     def get(self, request, pk, **kwargs):
         self.lead_obj = self.get_object(pk)
-        context = self.get_context_data(**kwargs)
 
+        # Permission check
+        user_assgn_list = []
+        if self.lead_obj.assigned_to:
+            user_assgn_list.append(self.lead_obj.assigned_to.id)
+
+        if self.request.profile.user == self.lead_obj.created_by:
+            user_assgn_list.append(self.request.profile.id)
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            if self.request.profile.id not in user_assgn_list:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have Permission to perform this action",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        context = self.get_context_data(**kwargs)
         return Response(context)
 
     @extend_schema(
@@ -548,6 +549,23 @@ class LeadDetailView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Role-based permission check for lead updates
+        if request.profile.role == "USER":
+            # Users can only update leads they created or are assigned to
+            can_update = self.lead_obj.created_by == request.profile.user or (
+                self.lead_obj.assigned_to
+                and self.lead_obj.assigned_to == request.profile
+            )
+            if not can_update:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have permission to update this lead",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        # Admin and Manager can update any lead (no additional check needed)
 
         # Check for required fields (same as in create method)
         required_fields = ["contact", "company", "description", "status", "assigned_to"]
@@ -677,6 +695,7 @@ class LeadDetailView(APIView):
             request.profile.role in ["ADMIN", "MANAGER"]
             or request.user.is_superuser
             or request.profile.user == self.object.created_by
+            or (self.object.assigned_to and self.object.assigned_to == request.profile)
         ) and self.object.organization == request.profile.org:
             self.object.delete()
             return Response(

@@ -328,7 +328,10 @@ class OpportunityDetailView(APIView):
             self.request.profile.role not in ["ADMIN", "MANAGER"]
             and not self.request.user.is_superuser
         ):
-            if self.request.profile != self.object.created_by:
+            if not (
+                (self.request.profile == self.object.created_by)
+                or (self.request.profile in self.object.assigned_to.all())
+            ):
                 return Response(
                     {
                         "error": True,
@@ -572,9 +575,12 @@ class OpportunityAttachmentView(APIView):
         opportunity = self.get_object(pk)
 
         # Проверка прав доступа
-        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
             if not (
-                (request.profile == opportunity.created_by)
+                (request.profile.user == opportunity.created_by)
                 or (request.profile in opportunity.assigned_to.all())
             ):
                 return Response(
@@ -624,9 +630,12 @@ class OpportunityAttachmentView(APIView):
             )
 
             # Проверка прав доступа
-            if request.profile.role != "ADMIN" and not request.user.is_superuser:
+            if (
+                request.profile.role not in ["ADMIN", "MANAGER"]
+                and not request.user.is_superuser
+            ):
                 if not (
-                    (request.profile == opportunity.created_by)
+                    (request.profile.user == opportunity.created_by)
                     or (request.profile in opportunity.assigned_to.all())
                 ):
                     return Response(
@@ -772,9 +781,12 @@ class OpportunityPipelineView(APIView):
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
 
         # Проверка прав доступа
-        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
             if not (
-                (request.profile == opportunity.created_by)
+                (request.profile.user == opportunity.created_by)
                 or (request.profile in opportunity.assigned_to.all())
             ):
                 return Response(
@@ -877,9 +889,12 @@ class OpportunityPipelineView(APIView):
         opportunity = get_object_or_404(Opportunity, pk=pk, org=request.profile.org)
 
         # Проверка прав доступа
-        if request.profile.role != "ADMIN" and not request.user.is_superuser:
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
             if not (
-                (request.profile == opportunity.created_by)
+                (request.profile.user == opportunity.created_by)
                 or (request.profile in opportunity.assigned_to.all())
             ):
                 return Response(
