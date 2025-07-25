@@ -36,7 +36,7 @@ class CaseListView(APIView, LimitOffsetPagination):
         accounts = Account.objects.filter(org=self.request.profile.org).order_by("-id")
         contacts = Contact.objects.filter(org=self.request.profile.org).order_by("-id")
         profiles = Profile.objects.filter(is_active=True, org=self.request.profile.org)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
             ).distinct()
@@ -167,7 +167,7 @@ class CaseDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == cases_object.created_by)
                 or (self.request.profile in cases_object.assigned_to.all())
@@ -251,7 +251,7 @@ class CaseDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile != self.object.created_by:
                 return Response(
                     {
@@ -278,7 +278,7 @@ class CaseDetailView(APIView):
             )
         context = {}
         context["cases_obj"] = CaseSerializer(self.cases).data
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.cases.created_by)
                 or (self.request.profile in self.cases.assigned_to.all())
@@ -296,11 +296,11 @@ class CaseDetailView(APIView):
         if (
             self.request.profile == self.cases.created_by
             or self.request.profile.is_admin
-            or self.request.profile.role == "ADMIN"
+            or self.request.profile.role in ["ADMIN", "MANAGER"]
         ):
             comment_permission = True
 
-        if self.request.profile.is_admin or self.request.profile.role == "ADMIN":
+        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
             users_mention = list(
                 Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
                     "user__email"
@@ -346,7 +346,7 @@ class CaseDetailView(APIView):
             )
         context = {}
         comment_serializer = CommentSerializer(data=params)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.cases_obj.created_by)
                 or (self.request.profile in self.cases_obj.assigned_to.all())
@@ -401,7 +401,7 @@ class CaseCommentView(APIView):
         params = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == obj.commented_by
         ):
@@ -431,7 +431,7 @@ class CaseCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.commented_by
         ):
@@ -460,7 +460,7 @@ class CaseAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):

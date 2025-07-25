@@ -15,7 +15,7 @@ from accounts.models import Account
 from accounts.serializer import AccountSerializer
 from common.models import Attachments, Comment, User
 
-#from common.external_auth import CustomDualAuthentication
+# from common.external_auth import CustomDualAuthentication
 from common.serializer import (
     AttachmentsSerializer,
     BillingAddressSerializer,
@@ -49,8 +49,7 @@ INVOICE_STATUS = (
 
 
 class InvoiceListView(APIView, LimitOffsetPagination):
-
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Invoice
 
@@ -76,9 +75,7 @@ class InvoiceListView(APIView, LimitOffsetPagination):
             if params.get("created_by"):
                 queryset = queryset.filter(created_by=params.get("created_by"))
             if params.get("assigned_users"):
-                queryset = queryset.filter(
-                    assigned_to__in=params.get("assigned_users")
-                )
+                queryset = queryset.filter(assigned_to__in=params.get("assigned_users"))
             if params.get("status"):
                 queryset = queryset.filter(status=params.get("status"))
             if params.get("total_amount"):
@@ -131,12 +128,18 @@ class InvoiceListView(APIView, LimitOffsetPagination):
 
         return context
 
-    @extend_schema(tags=["Invoices"], parameters=swagger_params1.invoice_list_get_params)
+    @extend_schema(
+        tags=["Invoices"], parameters=swagger_params1.invoice_list_get_params
+    )
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
         return Response(context)
 
-    @extend_schema(tags=["Invoices"], parameters=swagger_params1.organization_params,request=InvoiceSwaggerSerailizer)
+    @extend_schema(
+        tags=["Invoices"],
+        parameters=swagger_params1.organization_params,
+        request=InvoiceSwaggerSerailizer,
+    )
     def post(self, request, *args, **kwargs):
         params = request.data
         data = {}
@@ -240,7 +243,7 @@ class InvoiceListView(APIView, LimitOffsetPagination):
 
 
 class InvoiceDetailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Invoice
 
@@ -450,7 +453,7 @@ class InvoiceDetailView(APIView):
             )
         elif self.request.user != self.invoice.created_by:
             if self.invoice.created_by:
-                users_mention = [{"username": self.invoice.created_by.username}]
+                users_mention = [{"username": self.invoice.created_by.email}]
             else:
                 users_mention = []
         else:
@@ -540,7 +543,7 @@ class InvoiceDetailView(APIView):
 
 class InvoiceCommentView(APIView):
     model = Comment
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
@@ -603,7 +606,7 @@ class InvoiceCommentView(APIView):
 
 class InvoiceAttachmentView(APIView):
     model = Attachments
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     @swagger_auto_schema(

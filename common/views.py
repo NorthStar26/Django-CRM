@@ -193,12 +193,20 @@ class UsersListView(APIView, LimitOffsetPagination):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        # if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.user.is_superuser:
         #     return Response(
         #         {"error": True, "errors": "Permission Denied"},
         #         status=status.HTTP_403_FORBIDDEN,
         #     )
         queryset = Profile.objects.filter(org=request.profile.org).order_by("-id")
+
+        # For normal users (not ADMIN/MANAGER), only show their own profile
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            queryset = queryset.filter(id=self.request.profile.id)
+
         params = request.query_params
         if params:
             if params.get("email"):
@@ -276,7 +284,7 @@ class UserDetailView(APIView):
     def get(self, request, pk, format=None):
         profile_obj = self.get_object(pk)
         if (
-            self.request.profile.role != "ADMIN"
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
             and not self.request.profile.is_admin
             and self.request.profile.id != profile_obj.id
         ):
@@ -440,7 +448,10 @@ class ApiHomeView(APIView):
         )
         opportunities = Opportunity.objects.filter(org=request.profile.org)
 
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             accounts = accounts.filter(
                 Q(assigned_to=self.request.profile)
                 | Q(created_by=self.request.profile.user)
@@ -603,7 +614,10 @@ class DocumentListView(APIView, LimitOffsetPagination):
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
             "-id"
         )
-        if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
+        if self.request.user.is_superuser or self.request.profile.role in [
+            "ADMIN",
+            "MANAGER",
+        ]:
             queryset = queryset
         else:
             if self.request.profile.documents():
@@ -633,7 +647,10 @@ class DocumentListView(APIView, LimitOffsetPagination):
         profile_list = Profile.objects.filter(
             is_active=True, org=self.request.profile.org
         )
-        if self.request.profile.role == "ADMIN" or self.request.profile.is_admin:
+        if (
+            self.request.profile.role in ["ADMIN", "MANAGER"]
+            or self.request.profile.is_admin
+        ):
             profiles = profile_list.order_by("user__email")
         else:
             profiles = profile_list.filter(role="ADMIN").order_by("user__email")
@@ -752,9 +769,12 @@ class DocumentDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(
@@ -765,7 +785,7 @@ class DocumentDetailView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
         profile_list = Profile.objects.filter(org=self.request.profile.org)
-        if request.profile.role == "ADMIN" or request.user.is_superuser:
+        if request.profile.role in ["ADMIN", "MANAGER"] or request.user.is_superuser:
             profiles = profile_list.order_by("user__email")
         else:
             profiles = profile_list.filter(role="ADMIN").order_by("user__email")
@@ -793,9 +813,12 @@ class DocumentDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if (
-                self.request.profile != document.created_by
+                self.request.profile.user != document.created_by
             ):  # or (self.request.profile not in document.shared_to.all()):
                 return Response(
                     {
@@ -828,9 +851,12 @@ class DocumentDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(
@@ -1166,29 +1192,29 @@ class UserImageView(APIView):
     )
     def put(self, request, pk):
         profile = get_object_or_404(Profile, user__id=pk, org=request.profile.org)
-        
+
         # Check if the request is to remove the profile picture
         if request.data.get("profile_pic") in [None, ""]:
             # Clear the profile picture
             profile.user.profile_pic = None
             profile.user.save()
-            
+
             return Response(
                 {
-                    "error": False, 
+                    "error": False,
                     "message": "Profile picture removed successfully",
-                    "profile_pic": None
+                    "profile_pic": None,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
-        
+
         # Handle regular profile picture update
         if not request.data.get("profile_pic"):
             return Response(
                 {"error": True, "errors": "Profile picture is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
         if request.data.get("email") != profile.user.email:
             return Response(
                 {
@@ -1197,18 +1223,18 @@ class UserImageView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-            
+
         # Update the profile picture
         profile.user.profile_pic = request.data.get("profile_pic")
         profile.user.save()
-        
+
         return Response(
             {
-                "error": False, 
+                "error": False,
                 "message": "Profile picture updated successfully",
-                "profile_pic": profile.user.profile_pic
+                "profile_pic": profile.user.profile_pic,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 

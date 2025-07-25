@@ -64,7 +64,10 @@ class LeadListView(APIView, LimitOffsetPagination):
                 "assigned_to",
             )
         ).order_by("-id")
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
                 | Q(created_by=self.request.profile.user)
@@ -344,22 +347,6 @@ class LeadDetailView(APIView):
 
     def get_context_data(self, **kwargs):
         context = {}
-        # Handle assigned_to as a ForeignKey instead of ManyToMany
-        user_assgn_list = []
-        if self.lead_obj.assigned_to:
-            user_assgn_list.append(self.lead_obj.assigned_to.id)
-
-        if self.request.profile.user == self.lead_obj.created_by:
-            user_assgn_list.append(self.request.profile.user)
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
-            if self.request.profile.id not in user_assgn_list:
-                return Response(
-                    {
-                        "error": True,
-                        "errors": "You do not have Permission to perform this action",
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         comments = Comment.objects.filter(lead=self.lead_obj).order_by("-id")
         attachments = Attachments.objects.filter(lead=self.lead_obj).order_by("-id")
@@ -371,14 +358,17 @@ class LeadDetailView(APIView):
             assigned_dict["name"] = self.lead_obj.assigned_to.user.email
             assigned_data.append(assigned_dict)
 
-        if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
+        if self.request.user.is_superuser or self.request.profile.role in [
+            "ADMIN",
+            "MANAGER",
+        ]:
             users_mention = list(
                 Profile.objects.filter(
                     is_active=True, org=self.request.profile.org
                 ).values("user__email")
             )
         elif self.request.profile.user != self.lead_obj.created_by:
-            users_mention = [{"username": self.lead_obj.created_by.username}]
+            users_mention = [{"user__email": self.lead_obj.created_by.email}]
         else:
             # Handle assigned_to as a single object
             users_mention = []
@@ -387,7 +377,10 @@ class LeadDetailView(APIView):
                     {"user__email": self.lead_obj.assigned_to.user.email}
                 )
 
-        if self.request.profile.role == "ADMIN" or self.request.user.is_superuser:
+        if (
+            self.request.profile.role in ["ADMIN", "MANAGER"]
+            or self.request.user.is_superuser
+        ):
             users = Profile.objects.filter(
                 is_active=True, org=self.request.profile.org
             ).order_by("user__email")
@@ -403,7 +396,10 @@ class LeadDetailView(APIView):
 
         if self.request.profile.user == self.lead_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if self.request.profile.id not in user_assgn_list:
                 return Response(
                     {
@@ -449,8 +445,28 @@ class LeadDetailView(APIView):
     )
     def get(self, request, pk, **kwargs):
         self.lead_obj = self.get_object(pk)
-        context = self.get_context_data(**kwargs)
 
+        # Permission check
+        user_assgn_list = []
+        if self.lead_obj.assigned_to:
+            user_assgn_list.append(self.lead_obj.assigned_to.id)
+
+        if self.request.profile.user == self.lead_obj.created_by:
+            user_assgn_list.append(self.request.profile.id)
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            if self.request.profile.id not in user_assgn_list:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have Permission to perform this action",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        context = self.get_context_data(**kwargs)
         return Response(context)
 
     @extend_schema(
@@ -468,7 +484,10 @@ class LeadDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
                 (self.request.profile.user == self.lead_obj.created_by)
                 or (self.request.profile == self.lead_obj.assigned_to)
@@ -530,6 +549,23 @@ class LeadDetailView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Role-based permission check for lead updates
+        if request.profile.role == "USER":
+            # Users can only update leads they created or are assigned to
+            can_update = self.lead_obj.created_by == request.profile.user or (
+                self.lead_obj.assigned_to
+                and self.lead_obj.assigned_to == request.profile
+            )
+            if not can_update:
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You do not have permission to update this lead",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        # Admin and Manager can update any lead (no additional check needed)
 
         # Check for required fields (same as in create method)
         required_fields = ["contact", "company", "description", "status", "assigned_to"]
@@ -654,20 +690,31 @@ class LeadDetailView(APIView):
         description="Lead Delete",
     )
     def delete(self, request, pk, **kwargs):
-        self.object = self.get_object(pk)
+        # Only ADMIN and MANAGER can delete leads
         if (
-            request.profile.role == "ADMIN"
-            or request.user.is_superuser
-            or request.profile.user == self.object.created_by
-        ) and self.object.organization == request.profile.org:
-            self.object.delete()
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
             return Response(
-                {"error": False, "message": "Lead deleted Successfully"},
-                status=status.HTTP_200_OK,
+                {
+                    "error": True,
+                    "errors": "You don't have permission to delete this lead",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
+
+        self.object = self.get_object(pk)
+        # Check if lead belongs to user's organization
+        if self.object.organization != request.profile.org:
+            return Response(
+                {"error": True, "errors": "Lead not found in your organization"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        self.object.delete()
         return Response(
-            {"error": True, "errors": "you don't have permission to delete this lead"},
-            status=status.HTTP_403_FORBIDDEN,
+            {"error": False, "message": "Lead deleted Successfully"},
+            status=status.HTTP_200_OK,
         )
 
 
@@ -718,7 +765,7 @@ class LeadCommentView(APIView):
         params = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.user.is_superuser
             or request.profile == obj.commented_by
         ):
@@ -745,7 +792,7 @@ class LeadCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.user.is_superuser
             or request.profile == self.object.commented_by
         ):
@@ -844,7 +891,7 @@ class LeadAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.user.is_superuser
             or request.profile.user == self.object.created_by
         ):

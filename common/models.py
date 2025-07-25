@@ -221,6 +221,15 @@ class Profile(BaseModel):
     def is_admin(self):
         return self.is_organization_admin
 
+    def is_admin_role(self):
+        return self.role == "ADMIN"
+
+    def is_manager_role(self):
+        return self.role == "MANAGER"
+
+    def is_user_role(self):
+        return self.role == "USER"
+
     @property
     def user_details(self):
         return {
@@ -463,7 +472,6 @@ def document_path(self, filename):
 
 
 class Document(BaseModel):
-
     DOCUMENT_STATUS_CHOICE = (("active", "active"), ("inactive", "inactive"))
 
     title = models.TextField(blank=True, null=True)
