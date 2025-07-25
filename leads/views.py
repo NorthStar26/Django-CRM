@@ -690,21 +690,31 @@ class LeadDetailView(APIView):
         description="Lead Delete",
     )
     def delete(self, request, pk, **kwargs):
-        self.object = self.get_object(pk)
+        # Only ADMIN and MANAGER can delete leads
         if (
-            request.profile.role in ["ADMIN", "MANAGER"]
-            or request.user.is_superuser
-            or request.profile.user == self.object.created_by
-            or (self.object.assigned_to and self.object.assigned_to == request.profile)
-        ) and self.object.organization == request.profile.org:
-            self.object.delete()
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
             return Response(
-                {"error": False, "message": "Lead deleted Successfully"},
-                status=status.HTTP_200_OK,
+                {
+                    "error": True,
+                    "errors": "You don't have permission to delete this lead",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
+
+        self.object = self.get_object(pk)
+        # Check if lead belongs to user's organization
+        if self.object.organization != request.profile.org:
+            return Response(
+                {"error": True, "errors": "Lead not found in your organization"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        self.object.delete()
         return Response(
-            {"error": True, "errors": "you don't have permission to delete this lead"},
-            status=status.HTTP_403_FORBIDDEN,
+            {"error": False, "message": "Lead deleted Successfully"},
+            status=status.HTTP_200_OK,
         )
 
 

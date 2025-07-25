@@ -318,27 +318,27 @@ class OpportunityDetailView(APIView):
         tags=["Opportunities"], parameters=swagger_params1.organization_params
     )
     def delete(self, request, pk, format=None):
+        # Only ADMIN and MANAGER can delete opportunities
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
+            return Response(
+                {
+                    "error": True,
+                    "errors": "You don't have permission to delete this opportunity",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         self.object = self.get_object(pk)
+        # Check if opportunity belongs to user's organization
         if self.object.org != request.profile.org:
             return Response(
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if (
-            self.request.profile.role not in ["ADMIN", "MANAGER"]
-            and not self.request.user.is_superuser
-        ):
-            if not (
-                (self.request.profile == self.object.created_by)
-                or (self.request.profile in self.object.assigned_to.all())
-            ):
-                return Response(
-                    {
-                        "error": True,
-                        "errors": "You do not have Permission to perform this action",
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+
         self.object.delete()
         return Response(
             {"error": False, "message": "Opportunity Deleted Successfully."},

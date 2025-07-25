@@ -438,6 +438,19 @@ class ContactDetailView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # Only ADMIN and MANAGER can delete contacts
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
+            return Response(
+                {
+                    "error": True,
+                    "errors": "You don't have permission to delete this contact",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             contact_obj = self.get_object(pk)
             if contact_obj.org != request.profile.org:
@@ -445,18 +458,6 @@ class ContactDetailView(APIView):
                     {"error": True, "errors": "Contact not found in your organization"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-            # Role-based permission check for contact deletion
-            if request.profile.role == "USER":
-                # Users can only delete contacts they created
-                if contact_obj.created_by != request.profile.user:
-                    return Response(
-                        {
-                            "error": True,
-                            "errors": "You do not have Permission to delete this contact",
-                        },
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-            # Admin and Manager can delete any contact (no additional check needed)
 
             contact_obj.delete()
 
