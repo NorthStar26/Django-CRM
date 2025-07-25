@@ -231,6 +231,8 @@ class OpportunityPipelineSerializer(serializers.ModelSerializer):
         source="opportunity_attachment", many=True, read_only=True
     )
 
+    lead = serializers.SerializerMethodField()
+
     # attachments = serializers.SerializerMethodField()
     # def get_attachments(self, obj):
     #     from common.serializer import AttachmentsSerializer
@@ -263,8 +265,15 @@ class OpportunityPipelineSerializer(serializers.ModelSerializer):
             "attachment_links",
             "attachments",
             "result",
+            "lead"
         )
         read_only_fields = ("id", "created_at")
+
+    def get_lead(self, obj):
+        if hasattr(obj, "lead") and obj.lead:
+            from leads.serializer import LeadSerializer
+            return LeadSerializer(obj.lead).data
+        return None
 
 
 class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
