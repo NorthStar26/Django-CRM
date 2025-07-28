@@ -363,3 +363,7 @@ class OpportunityAttachmentCreateSwaggerSerializer(serializers.Serializer):
         help_text="Type of attachment: proposal или contract",
         required=False,
     )
+class OpportunityDashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Opportunity
+        fields = ("id", "name", "updated_at", "stage")

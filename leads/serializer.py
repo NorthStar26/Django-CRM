@@ -335,3 +335,8 @@ class LeadCommentEditSwaggerSerializer(serializers.Serializer):
 
 class LeadUploadSwaggerSerializer(serializers.Serializer):
     leads_file = serializers.FileField()
+
+class LeadDashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = ("id", "lead_title", "updated_at", "status", "converted_at")
