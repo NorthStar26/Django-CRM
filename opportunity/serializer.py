@@ -1,3 +1,4 @@
+from venv import create
 from rest_framework import serializers
 from companies.serializer import CompanyDetailSerializer
 from contacts.serializer import ContactSerializer
@@ -366,4 +367,4 @@ class OpportunityAttachmentCreateSwaggerSerializer(serializers.Serializer):
 class OpportunityDashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Opportunity
-        fields = ("id", "name", "updated_at", "stage")
+        fields = ("id", "name", "created_at", "updated_at", "stage")

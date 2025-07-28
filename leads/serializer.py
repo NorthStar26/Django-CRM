@@ -337,6 +337,13 @@ class LeadUploadSwaggerSerializer(serializers.Serializer):
     leads_file = serializers.FileField()
 
 class LeadDashboardSerializer(serializers.ModelSerializer):
+    contact_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Lead
-        fields = ("id", "lead_title", "updated_at", "status", "converted_at")
+        fields = ["id", "lead_title", "status", "created_at", "updated_at", "contact_name"]
+
+    def get_contact_name(self, obj):
+        if obj.contact:
+            return f"{obj.contact.first_name} {obj.contact.last_name}".strip()
+        return ""

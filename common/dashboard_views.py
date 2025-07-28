@@ -12,6 +12,7 @@ from common.swagger_params1 import organization_params
 from django.db.models import Count, Sum, Q, Max
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from common.models import Org  # убедитесь, что импортируете Org
+from datetime import datetime, timedelta
 
 @extend_schema(
     tags=["Dashboard"],
@@ -46,6 +47,19 @@ class DashboardSummaryView(APIView):
                 {"error": True, "message": "Organization not found."},
                 status=404,
             )
+        lead_status = request.query_params.get("lead_status")
+        opportunity_stage = request.query_params.get("opportunity_stage")
+        days = request.query_params.get("days")  # например, 7
+
+        # --- фильтры для дат ---
+        date_filter = {}
+        if days:
+            try:
+                days = int(days)
+                date_from = datetime.now() - timedelta(days=days)
+                date_filter = {"created_at__gte": date_from}
+            except Exception:
+                pass
 
         if is_admin:
             company_filter = {}
@@ -58,21 +72,23 @@ class DashboardSummaryView(APIView):
             lead_filter = Q(created_by=user) | Q(assigned_to=profile)
             opportunity_filter = Q(created_by=user) | Q(assigned_to=profile)
 
-        # Companies
-        companies_count = CompanyProfile.objects.filter(org=org, **company_filter).count()
-        # Contacts
-        contacts_count = Contact.objects.filter(org=org, **contact_filter).count()
-        # Leads
-        if is_admin:
-            leads_qs = Lead.objects.filter(organization=org)
-        else:
-            leads_qs = Lead.objects.filter(organization=org).filter(lead_filter).distinct()
+        # --- Companies ---
+        companies_count = CompanyProfile.objects.filter(org=org, **company_filter, **date_filter).count()
+        # --- Contacts ---
+        contacts_count = Contact.objects.filter(org=org, **contact_filter, **date_filter).count()
+        # --- Leads ---
+        leads_qs = Lead.objects.filter(organization=org, **date_filter)
+        if not is_admin:
+            leads_qs = leads_qs.filter(lead_filter).distinct()
+        if lead_status:
+            leads_qs = leads_qs.filter(status=lead_status)
         leads_count = leads_qs.count()
-        # Opportunities
-        if is_admin:
-            opps_qs = Opportunity.objects.filter(org=org)
-        else:
-            opps_qs = Opportunity.objects.filter(org=org).filter(opportunity_filter).distinct()
+        # --- Opportunities ---
+        opps_qs = Opportunity.objects.filter(org=org, **date_filter)
+        if not is_admin:
+            opps_qs = opps_qs.filter(opportunity_filter).distinct()
+        if opportunity_stage:
+            opps_qs = opps_qs.filter(stage=opportunity_stage)
         opportunities_count = opps_qs.count()
 
         # Recent Leads
