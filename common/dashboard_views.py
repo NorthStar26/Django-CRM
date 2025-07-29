@@ -11,8 +11,18 @@ from opportunity.serializer import OpportunityDashboardSerializer
 from common.swagger_params1 import organization_params
 from django.db.models import Count, Sum, Q, Max
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
-from common.models import Org  # убедитесь, что импортируете Org
+from common.models import Org
 from datetime import datetime, timedelta
+from common.utils import LEAD_STATUS
+from common.utils import LEAD_STATUS
+
+OPPORTUNITY_STAGES = [
+    ("QUALIFICATION", "QUALIFICATION"),
+    ("IDENTIFY_DECISION_MAKERS", "Identify Decision Makers"),
+    ("PROPOSAL", "Proposal"),
+    ("NEGOTIATION", "Negotiation"),
+]
+
 
 @extend_schema(
     tags=["Dashboard"],
@@ -49,7 +59,7 @@ class DashboardSummaryView(APIView):
             )
         lead_status = request.query_params.get("lead_status")
         opportunity_stage = request.query_params.get("opportunity_stage")
-        days = request.query_params.get("days")  # например, 7
+        days = request.query_params.get("days")
 
         # --- фильтры для дат ---
         date_filter = {}
@@ -114,13 +124,20 @@ class DashboardSummaryView(APIView):
         opps_stage = {item["stage"]: item["count"] for item in opps_by_stage}
 
         return Response({
-            "companies_count": companies_count,
-            "contacts_count": contacts_count,
-            "leads_count": leads_count,
-            "opportunities_count": opportunities_count,
-            "total_pipeline_value": total_pipeline_value,
-            "leads_by_status": leads_status,
-            "opportunities_by_stage": opps_stage,
-            "recent_leads": recent_leads,
-            "recent_opportunities": recent_opps,
-        })
+    "companies_count": companies_count,
+    "contacts_count": contacts_count,
+    "leads_count": leads_count,
+    "opportunities_count": opportunities_count,
+    "total_pipeline_value": total_pipeline_value,
+    "leads_by_status": leads_status,
+    "opportunities_by_stage": opps_stage,
+    "recent_leads": recent_leads,
+    "recent_opportunities": recent_opps,
+    "lead_status_choices": [
+        {"value": choice[0], "label": choice[1]}
+        for choice in LEAD_STATUS
+    ],    "opportunity_stage_choices": [
+        {"value": choice[0], "label": choice[1]}
+        for choice in OPPORTUNITY_STAGES
+    ],
+})

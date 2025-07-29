@@ -341,9 +341,15 @@ class LeadDashboardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Lead
-        fields = ["id", "lead_title", "status", "created_at", "updated_at", "contact_name"]
+        fields = ["id", "status", "created_at", "updated_at", "contact_name"]
 
     def get_contact_name(self, obj):
         if obj.contact:
             return f"{obj.contact.first_name} {obj.contact.last_name}".strip()
         return ""
+
+    def get_created_at(self, obj):
+        return obj.created_at.strftime("%Y-%m-%d %H:%M:%S") if obj.created_at else None
+
+    def get_updated_at(self, obj):
+        return obj.updated_at.strftime("%Y-%m-%d %H:%M:%S") if obj.updated_at else None
