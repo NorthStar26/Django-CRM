@@ -61,8 +61,13 @@ class Case(BaseModel):
         default=True,
         help_text=_("True if Won, False if Lost")
     )
-
-
+    opportunity = models.OneToOneField(
+        Opportunity,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="lost_feedback_case"
+    )
     class Meta:
         verbose_name = "Case"
         verbose_name_plural = "Cases"
