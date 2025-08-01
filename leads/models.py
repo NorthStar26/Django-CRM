@@ -70,7 +70,7 @@ class Lead(BaseModel):
     )
     # Removed explicit created_by and updated_by fields to use those from BaseModel
     # which reference common.User instead of Profile
-
+    converted_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         verbose_name = "Lead"
         verbose_name_plural = "Leads"

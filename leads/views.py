@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from accounts.models import Account, Tags
 from common.models import APISettings, Attachments, Comment, Profile
+from django.utils import timezone
 
 # from common.external_auth import CustomDualAuthentication
 from common.serializer import (
@@ -657,9 +658,11 @@ class LeadDetailView(APIView):
 
                 account_object.save()
 
-                # update converted field if it is exists
+              # update converted field and converted_at timestamp
                 if params.get("converted") is not None:
                     lead_obj.converted = params.get("converted")
+                    if params.get("converted"):  # if lead is converted
+                        lead_obj.converted_at = timezone.now()
                     lead_obj.save()
 
                 return Response(

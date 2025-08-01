@@ -3,7 +3,7 @@ from rest_framework_simplejwt import views as jwt_views
 from common.views import CustomTokenObtainPairView
 from common import views
 from common.views import ResetPasswordRequestView, ResetPasswordConfirmView
-
+from common.dashboard_views import DashboardSummaryView
 
 app_name = "api_common"
 
@@ -36,6 +36,7 @@ urlpatterns = [
     path(
         "auth/reset-password/", views.ResetPasswordView.as_view(), name="reset_password"
     ),
+    path("dashboard/summary/", DashboardSummaryView.as_view()),
     path("org/", views.OrgProfileCreateView.as_view()),
     path("profile/", views.ProfileView.as_view()),
     path(

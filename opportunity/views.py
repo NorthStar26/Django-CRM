@@ -923,7 +923,10 @@ class OpportunityPipelineView(APIView):
 
         # Обрабатываем данные
         data = request.data.copy()
-
+        print(f"PATCH DATA: {data}")
+        print(f"Current stage: {opportunity.stage}")
+        print(f"Close option: {data.get('close_option')}")
+        print(f"Reason: {data.get('reason')}")
         # Handle stage transitions
         current_stage = opportunity.stage
         new_stage = data.get("stage")
@@ -1011,7 +1014,7 @@ class OpportunityPipelineView(APIView):
         if data.get("close_option") and opportunity.stage == "CLOSE":
             # Для CLOSED WON проверяем наличие контракта
             if (
-                data["close_option"] == "CLOSED WON"
+                data.get("close_option") == "CLOSED WON"
                 and not opportunity.contract_attachment
             ):
                 return Response(
@@ -1024,7 +1027,20 @@ class OpportunityPipelineView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+                # Для CLOSED LOST проверяем наличие reason
+            if data.get("close_option") == "CLOSED LOST" and not data.get("reason"):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": {
+                            "reason": "Please provide a reason for closing as lost"
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             data["stage"] = data["close_option"]
+
 
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity, data=data, partial=True, context={"request": request}
@@ -1032,7 +1048,7 @@ class OpportunityPipelineView(APIView):
 
         if serializer.is_valid():
             opportunity = serializer.save()
-
+            print(f"Saved opportunity reason: {opportunity.reason}")
             # Логирование изменений
             changes = []
 
