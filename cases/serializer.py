@@ -5,6 +5,7 @@ from cases.models import Case
 from common.serializer import OrganizationSerializer, ProfileSerializer,UserSerializer
 from contacts.serializer import ContactSerializer
 from teams.serializer import TeamsSerializer
+from opportunity.serializer import OpportunitySerializer  # import your Opportunity serializer
 
 
 class CaseSerializer(serializers.ModelSerializer):
@@ -14,6 +15,7 @@ class CaseSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
     teams = TeamsSerializer(read_only=True, many=True)
     org = OrganizationSerializer()
+    opportunity = OpportunitySerializer(read_only=True)  # <-- add this line
 
     class Meta:
         model = Case
@@ -34,6 +36,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "assigned_to",
             "org",
             "created_on_arrow",
+            "opportunity",  # <-- add this line
         )
 
 
