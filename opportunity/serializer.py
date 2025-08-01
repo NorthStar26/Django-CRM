@@ -82,6 +82,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "contact",
             "company_name",
             "lead",
+            "feedback"
         )
 
     def get_days_to_close(self, obj):
