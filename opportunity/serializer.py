@@ -264,6 +264,7 @@ class OpportunityPipelineSerializer(serializers.ModelSerializer):
             "attachment_links",
             "attachments",
             "result",
+            "reason",
         )
         read_only_fields = ("id", "created_at")
 
@@ -277,7 +278,7 @@ class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Select how to close the opportunity",
     )
-
+    reason = serializers.CharField(allow_blank=True, required=False)
     class Meta:
         model = Opportunity
         fields = (
@@ -309,11 +310,15 @@ class OpportunityPipelineUpdateSerializer(serializers.ModelSerializer):
                     data["result"] = True
 
             # Валидация для CLOSED LOST - требуем reason
-            if current_stage == "CLOSED LOST" and "reason" in data:
-                if not data["reason"]:
-                    raise serializers.ValidationError(
-                        {"reason": "Please provide a reason for closing as lost"}
-                    )
+            # if current_stage == "CLOSED LOST" and "reason" in data:
+            #     if not data["reason"]:
+            #         raise serializers.ValidationError(
+            #             {"reason": "Please provide a reason for closing as lost"}
+            #         )
+            if new_stage == "CLOSED LOST" and not data.get("reason"):
+                raise serializers.ValidationError(
+                    {"reason": "Please provide a reason for closing as lost"}
+                )
 
             # Определяем какую конфигурацию использовать
             stage_to_check = new_stage if new_stage != current_stage else current_stage
