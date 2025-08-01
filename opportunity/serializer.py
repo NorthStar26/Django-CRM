@@ -50,6 +50,8 @@ class OpportunitySerializer(serializers.ModelSerializer):
     contact = serializers.SerializerMethodField()
     opportunity_attachment = AttachmentsSerializer(many=True, read_only=True)
     lead = serializers.SerializerMethodField()
+    feedback = serializers.CharField(allow_blank=True, required=False)
+
 
     class Meta:
         model = Opportunity
@@ -83,6 +85,8 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "contact",
             "company_name",
             "lead",
+            "feedback",
+            "feedback"
         )
 
     def get_days_to_close(self, obj):
