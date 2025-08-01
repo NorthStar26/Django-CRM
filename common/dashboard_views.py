@@ -110,6 +110,7 @@ class DashboardSummaryView(APIView):
 
         # Pipeline Value (total)
         total_pipeline_value = opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
+        total_pipeline_value = round(total_pipeline_value, 3)
 
         # Leads by Status
         leads_by_status = (
