@@ -8,6 +8,8 @@ from rest_framework import serializers
 from django.http import Http404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
+from rest_framework.pagination import LimitOffsetPagination
+
 from .models import CompanyProfile
 from .serializer import (
     CompanyListSerializer,
@@ -58,50 +60,86 @@ def format_serializer_errors(serializer_errors):
         },
     ),
 )
+
+
 class CompanyListView(APIView):
     permission_classes = (IsAuthenticated,)
+    serializer_class = CompanyListSerializer
 
     @extend_schema(
         tags=["Companies"], parameters=company_list_get_params + company_auth_headers
     )
-    def get(self, request, *args, **kwargs):
-        """Get a list of companies with filtering"""
-        try:
-            print(f"Getting companies for user: {request.user}")
-            print(f"Request profile: {getattr(request, 'profile', 'Not found')}")
 
+    def get(self, request, *args, **kwargs):
+        try:
             companies = CompanyProfile.objects.filter(org=request.profile.org)
-            name_search = request.query_params.get("name", None)
+            name_search = request.query_params.get("name")
             if name_search:
                 companies = companies.filter(name__icontains=name_search)
-                print(f"Searching by name: {name_search}")
-
-            country_filter = request.query_params.get("billing_country", None)
+            country_filter = request.query_params.get("billing_country")
             if country_filter:
                 companies = companies.filter(billing_country=country_filter)
-                print(f"Filtering by country: {country_filter}")
-
-            industry_filter = request.query_params.get("industry", None)
+            industry_filter = request.query_params.get("industry")
             if industry_filter:
                 companies = companies.filter(industry=industry_filter)
-                print(f"Filtering by industry: {industry_filter}")
-
             companies = companies.order_by("-created_at")
 
-            serializer = CompanyListSerializer(companies, many=True)
-            return Response(
-                {"error": False, "data": serializer.data},
-                status=status.HTTP_200_OK,
-            )
+            # 1. Create a paginator instance
+            paginator = LimitOffsetPagination()
+            # 2. Paginate the queryset
+            paginated_companies = paginator.paginate_queryset(companies, request, view=self)
+            # 3. Serialize the paginated data
+            serializer = CompanyListSerializer(paginated_companies, many=True)
+             # 4.   Return the paginated response
+            return paginator.get_paginated_response(serializer.data)
+
         except Exception as e:
             import traceback
-
             print(f"Error getting companies: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
             return Response(
                 {"error": True, "message": f"Error getting companies: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    # def get(self, request, *args, **kwargs):
+    #     """Get a list of companies with filtering"""
+    #     try:
+    #         print(f"Getting companies for user: {request.user}")
+    #         print(f"Request profile: {getattr(request, 'profile', 'Not found')}")
+
+    #         companies = CompanyProfile.objects.filter(org=request.profile.org)
+    #         name_search = request.query_params.get("name", None)
+    #         if name_search:
+    #             companies = companies.filter(name__icontains=name_search)
+    #             print(f"Searching by name: {name_search}")
+
+    #         country_filter = request.query_params.get("billing_country", None)
+    #         if country_filter:
+    #             companies = companies.filter(billing_country=country_filter)
+    #             print(f"Filtering by country: {country_filter}")
+
+    #         industry_filter = request.query_params.get("industry", None)
+    #         if industry_filter:
+    #             companies = companies.filter(industry=industry_filter)
+    #             print(f"Filtering by industry: {industry_filter}")
+
+    #         companies = companies.order_by("-created_at")
+
+    #         serializer = CompanyListSerializer(companies, many=True)
+    #         return Response(
+    #             {"error": False, "data": serializer.data},
+    #             status=status.HTTP_200_OK,
+    #         )
+    #     except Exception as e:
+    #         import traceback
+
+    #         print(f"Error getting companies: {str(e)}")
+    #         print(f"Traceback: {traceback.format_exc()}")
+    #         return Response(
+    #             {"error": True, "message": f"Error getting companies: {str(e)}"},
+    #             status=status.HTTP_400_BAD_REQUEST,
+    #         )
 
     @extend_schema(
         tags=["Companies"],
