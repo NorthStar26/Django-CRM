@@ -99,6 +99,9 @@ class DashboardSummaryView(APIView):
             opps_qs = opps_qs.filter(opportunity_filter).distinct()
         if opportunity_stage:
             opps_qs = opps_qs.filter(stage=opportunity_stage)
+        else:
+        # Avoid filtering out closed stages unless specified
+            opps_qs = opps_qs.exclude(stage__in=["CLOSE", "CLOSED LOST", "CLOSED WON"])
         opportunities_count = opps_qs.count()
 
         # Recent Leads
@@ -120,8 +123,10 @@ class DashboardSummaryView(APIView):
 
         # Opportunities by Stage
         opps_by_stage = (
-            opps_qs.values("stage").annotate(count=Count("id"))
-        )
+         opps_qs.exclude(stage__in=["CLOSE", "CLOSED LOST", "CLOSED WON"])
+    .values("stage")
+    .annotate(count=Count("id"))
+)
         opps_stage = {item["stage"]: item["count"] for item in opps_by_stage}
 
         return Response({
