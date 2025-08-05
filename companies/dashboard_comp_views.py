@@ -7,6 +7,8 @@ from common.swagger_params1 import organization_params
 from contacts.models import Contact
 from common.models import Org
 from companies.models import CompanyProfile
+from leads.models import Lead
+from common.utils import LEAD_STATUS
 
 @extend_schema(
     tags=["Dashboard"],
@@ -100,10 +102,52 @@ class JobTitlesDistributionView(APIView):
             'percentage': round((item['count'] / total_contacts * 100), 1) if total_contacts > 0 else 0
         } for item in job_titles]
 
+
+
+        # ----- LEADS INFORMATION -----
+        # Base queryset for leads in the organization
+        leads_qs = Lead.objects.select_related('company', 'contact').filter(organization=org)
+        # Apply permissions filter for leads
+        if not is_admin:
+            leads_qs = leads_qs.filter(Q(created_by=user) | Q(assigned_to=profile)).distinct()
+
+        # Apply company filter to leads if provided
+        if company_id and company:
+            leads_qs = leads_qs.filter(company=company)
+
+        # Get total leads count
+        total_leads = leads_qs.count()
+
+        # Group leads by status
+        leads_by_status = leads_qs.values("status").annotate(count=Count("id"))
+        leads_status = {item["status"]: item["count"] for item in leads_by_status}
+
+        # Format response data for leads by status
+        leads_status_data = []
+        for status_choice in LEAD_STATUS:
+            status_value = status_choice[0]
+            status_label = status_choice[1]
+            count = leads_status.get(status_value, 0)
+            percentage = round((count / total_leads * 100), 1) if total_leads > 0 else 0
+
+            leads_status_data.append({
+                'status': status_value,
+                'label': status_label,
+                'count': count,
+                'percentage': percentage
+            })
+
         return Response({
             "error": False,
             "company": company_name,
+            "company_id": company_id if company else None,
             "total_contacts": total_contacts,
             "contacts_with_titles": contacts_with_titles,
-            "job_titles": job_titles_data
+            "job_titles": job_titles_data,
+            "total_leads": total_leads,
+            "leads_by_status": leads_status_data,
+            "lead_status_choices": [
+                {"value": choice[0], "label": choice[1]}
+                for choice in LEAD_STATUS
+            ]
         })
