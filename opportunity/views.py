@@ -125,6 +125,9 @@ class OpportunityListView(APIView, LimitOffsetPagination):
                 org=request.profile.org,
             )
 
+            # Add current user to the instance for signal access
+            opportunity_obj._current_user = request.profile.user
+
             if params.get("lead"):
                 lead = Lead.objects.filter(
                     id=params.get("lead"),
@@ -189,10 +192,26 @@ class OpportunityListView(APIView, LimitOffsetPagination):
                 recipients,
                 opportunity_obj.id,
             )
-            return Response(
-                {"error": False, "message": "Opportunity Created Successfully"},
-                status=status.HTTP_200_OK,
-            )
+
+            # Refresh from database to get the account created by the signal
+            opportunity_obj.refresh_from_db()
+
+            # Prepare response data
+            response_data = {
+                "error": False,
+                "message": "Opportunity Created Successfully",
+                "opportunity_id": str(opportunity_obj.id),
+            }
+
+            # Include account ID if opportunity was created as closed won and has an account
+            if opportunity_obj.stage == "CLOSED WON" and opportunity_obj.account:
+                response_data["account_id"] = str(opportunity_obj.account.id)
+                response_data["account_name"] = opportunity_obj.account.name
+                response_data["message"] = (
+                    "Opportunity Created Successfully. Account created/linked."
+                )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         return Response(
             {"error": True, "errors": serializer.errors},
@@ -245,6 +264,8 @@ class OpportunityDetailView(APIView):
         )
 
         if serializer.is_valid():
+            # Add current user to the instance for signal access
+            serializer.instance._current_user = self.request.profile.user
             opportunity_object = serializer.save(closed_on=params.get("due_date"))
             previous_assigned_to_users = list(
                 opportunity_object.assigned_to.all().values_list("id", flat=True)
@@ -305,10 +326,25 @@ class OpportunityDetailView(APIView):
                 recipients,
                 opportunity_object.id,
             )
-            return Response(
-                {"error": False, "message": "Opportunity Updated Successfully"},
-                status=status.HTTP_200_OK,
-            )
+
+            # Refresh from database to get the account created by the signal
+            opportunity_object.refresh_from_db()
+
+            # Prepare response data
+            response_data = {
+                "error": False,
+                "message": "Opportunity Updated Successfully",
+            }
+
+            # Include account ID if opportunity was closed won and has an account
+            if opportunity_object.stage == "CLOSED WON" and opportunity_object.account:
+                response_data["account_id"] = str(opportunity_object.account.id)
+                response_data["account_name"] = opportunity_object.account.name
+                response_data["message"] = (
+                    "Opportunity Updated Successfully. Account created/linked."
+                )
+
+            return Response(response_data, status=status.HTTP_200_OK)
         return Response(
             {"error": True, "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST,
@@ -1040,7 +1076,6 @@ class OpportunityPipelineView(APIView):
                 )
 
             data["stage"] = data["close_option"]
-
 
         serializer = OpportunityPipelineUpdateSerializer(
             opportunity, data=data, partial=True, context={"request": request}

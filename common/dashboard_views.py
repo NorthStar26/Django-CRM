@@ -15,6 +15,7 @@ from common.models import Org
 from datetime import datetime, timedelta
 from common.utils import LEAD_STATUS
 from common.utils import LEAD_STATUS
+from accounts.models import Account
 
 OPPORTUNITY_STAGES = [
     ("QUALIFICATION", "QUALIFICATION"),
@@ -27,7 +28,7 @@ OPPORTUNITY_STAGES = [
 @extend_schema(
     tags=["Dashboard"],
     parameters=organization_params,
-    responses={200: "Dashboard summary data"}
+    responses={200: "Dashboard summary data"},
 )
 class DashboardSummaryView(APIView):
     permission_classes = [IsAuthenticated]
@@ -35,16 +36,17 @@ class DashboardSummaryView(APIView):
     def get(self, request):
         if not hasattr(request, "profile") or request.profile is None:
             return Response(
-                {"error": True, "message": "User profile not found or not authenticated."},
+                {
+                    "error": True,
+                    "message": "User profile not found or not authenticated.",
+                },
                 status=401,
             )
 
         user = request.profile.user
         profile = request.profile
 
-        is_admin = (
-            profile.role in ["ADMIN", "MANAGER"] or request.user.is_superuser
-        )
+        is_admin = profile.role in ["ADMIN", "MANAGER"] or request.user.is_superuser
         org_id = request.headers.get("org")
         if not org_id:
             return Response(
@@ -83,9 +85,20 @@ class DashboardSummaryView(APIView):
             opportunity_filter = Q(created_by=user) | Q(assigned_to=profile)
 
         # --- Companies ---
-        companies_count = CompanyProfile.objects.filter(org=org, **company_filter, **date_filter).count()
+        companies_count = CompanyProfile.objects.filter(
+            org=org, **company_filter, **date_filter
+        ).count()
         # --- Contacts ---
-        contacts_count = Contact.objects.filter(org=org, **contact_filter, **date_filter).count()
+        contacts_count = Contact.objects.filter(
+            org=org, **contact_filter, **date_filter
+        ).count()
+        # --- Accounts ---
+        accounts_qs = Account.objects.filter(org=org, **date_filter)
+        if not is_admin:
+            accounts_qs = accounts_qs.filter(
+                Q(created_by=user) | Q(assigned_to=profile)
+            ).distinct()
+        accounts_count = accounts_qs.count()
         # --- Leads ---
         leads_qs = Lead.objects.filter(organization=org, **date_filter)
         if not is_admin:
@@ -94,11 +107,15 @@ class DashboardSummaryView(APIView):
             leads_qs = leads_qs.filter(status=lead_status)
         leads_count = leads_qs.count()
         # --- Opportunities ---
+        # --- Opportunities ---
         opps_qs = Opportunity.objects.filter(org=org, **date_filter)
         if not is_admin:
             opps_qs = opps_qs.filter(opportunity_filter).distinct()
         if opportunity_stage:
             opps_qs = opps_qs.filter(stage=opportunity_stage)
+        else:
+            #  if no stage is provided, exclude closed stages
+            opps_qs = opps_qs.exclude(stage__in=["CLOSE", "CLOSED LOST", "CLOSED WON"])
         opportunities_count = opps_qs.count()
 
         # Recent Leads
@@ -109,36 +126,37 @@ class DashboardSummaryView(APIView):
         recent_opps = OpportunityDashboardSerializer(recent_opps_qs, many=True).data
 
         # Pipeline Value (total)
-        total_pipeline_value = opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
+        total_pipeline_value = (
+            opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
+        )
         total_pipeline_value = round(total_pipeline_value, 3)
 
         # Leads by Status
-        leads_by_status = (
-            leads_qs.values("status").annotate(count=Count("id"))
-        )
+        leads_by_status = leads_qs.values("status").annotate(count=Count("id"))
         leads_status = {item["status"]: item["count"] for item in leads_by_status}
 
         # Opportunities by Stage
-        opps_by_stage = (
-            opps_qs.values("stage").annotate(count=Count("id"))
-        )
+        opps_by_stage = opps_qs.values("stage").annotate(count=Count("id"))
         opps_stage = {item["stage"]: item["count"] for item in opps_by_stage}
 
-        return Response({
-    "companies_count": companies_count,
-    "contacts_count": contacts_count,
-    "leads_count": leads_count,
-    "opportunities_count": opportunities_count,
-    "total_pipeline_value": total_pipeline_value,
-    "leads_by_status": leads_status,
-    "opportunities_by_stage": opps_stage,
-    "recent_leads": recent_leads,
-    "recent_opportunities": recent_opps,
-    "lead_status_choices": [
-        {"value": choice[0], "label": choice[1]}
-        for choice in LEAD_STATUS
-    ],    "opportunity_stage_choices": [
-        {"value": choice[0], "label": choice[1]}
-        for choice in OPPORTUNITY_STAGES
-    ],
-})
+        return Response(
+            {
+                "companies_count": companies_count,
+                "contacts_count": contacts_count,
+                "accounts_count": accounts_count,
+                "leads_count": leads_count,
+                "opportunities_count": opportunities_count,
+                "total_pipeline_value": total_pipeline_value,
+                "leads_by_status": leads_status,
+                "opportunities_by_stage": opps_stage,
+                "recent_leads": recent_leads,
+                "recent_opportunities": recent_opps,
+                "lead_status_choices": [
+                    {"value": choice[0], "label": choice[1]} for choice in LEAD_STATUS
+                ],
+                "opportunity_stage_choices": [
+                    {"value": choice[0], "label": choice[1]}
+                    for choice in OPPORTUNITY_STAGES
+                ],
+            }
+        )

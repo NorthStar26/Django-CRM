@@ -3,15 +3,12 @@ import json
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
-from drf_rw_serializers import generics
-
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import GenericAPIView
 
 from accounts import swagger_params1
 from accounts.models import Account, Tags
@@ -24,7 +21,7 @@ from accounts.serializer import (
     AccountWriteSerializer,
     AccountDetailEditSwaggerSerializer,
     AccountCommentEditSwaggerSerializer,
-    EmailWriteSerializer
+    EmailWriteSerializer,
 )
 from teams.serializer import TeamsSerializer
 from accounts.tasks import send_email, send_email_to_assigned_user
@@ -33,7 +30,7 @@ from common.models import Attachments, Comment, Profile
 from leads.models import Lead
 from leads.serializer import LeadSerializer
 
-#from common.external_auth import CustomDualAuthentication
+from common.external_auth import CustomDualAuthentication
 from common.serializer import (
     AttachmentsSerializer,
     CommentSerializer,
@@ -57,17 +54,23 @@ from teams.models import Teams
 
 
 class AccountsListView(APIView, LimitOffsetPagination):
-    #authentication_classes = (CustomDualAuthentication,)
+    authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Account
     serializer_class = AccountReadSerializer
 
     def get_context_data(self, **kwargs):
         params = self.request.query_params
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
+            "-id"
+        )
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             queryset = queryset.filter(
-                Q(created_by=self.request.profile.user) | Q(assigned_to=self.request.profile)
+                Q(created_by=self.request.profile.user)
+                | Q(assigned_to=self.request.profile)
             ).distinct()
 
         if params:
@@ -78,9 +81,7 @@ class AccountsListView(APIView, LimitOffsetPagination):
             if params.get("industry"):
                 queryset = queryset.filter(industry__icontains=params.get("industry"))
             if params.get("tags"):
-                queryset = queryset.filter(
-                    tags__in=params.get("tags")
-                ).distinct()
+                queryset = queryset.filter(tags__in=params.get("tags")).distinct()
 
         context = {}
         queryset_open = queryset.filter(status="open")
@@ -134,16 +135,16 @@ class AccountsListView(APIView, LimitOffsetPagination):
         tags = TagsSerailizer(tags, many=True).data
 
         context["tags"] = tags
-        users = Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-            "id", "user__email"
-        )
+        users = Profile.objects.filter(
+            is_active=True, org=self.request.profile.org
+        ).values("id", "user__email")
         context["users"] = users
-        leads = Lead.objects.filter(org=self.request.profile.org).exclude(
+        leads = Lead.objects.filter(organization=self.request.profile.org).exclude(
             Q(status="converted") | Q(status="closed")
         )
         context["users"] = users
         context["leads"] = LeadSerializer(leads, many=True).data
-        context["status"] = ["open","close"]
+        context["status"] = ["open", "close"]
         return context
 
     @extend_schema(tags=["Accounts"], parameters=swagger_params1.account_get_params)
@@ -151,7 +152,11 @@ class AccountsListView(APIView, LimitOffsetPagination):
         context = self.get_context_data(**kwargs)
         return Response(context)
 
-    @extend_schema(tags=["Accounts"], parameters=swagger_params1.organization_params,request=AccountWriteSerializer)
+    @extend_schema(
+        tags=["Accounts"],
+        parameters=swagger_params1.organization_params,
+        request=AccountWriteSerializer,
+    )
     def post(self, request, *args, **kwargs):
         data = request.data
         serializer = AccountCreateSerializer(
@@ -159,12 +164,12 @@ class AccountsListView(APIView, LimitOffsetPagination):
         )
         # Save Account
         if serializer.is_valid():
-            account_object = serializer.save(
-                org=request.profile.org
-            )
+            account_object = serializer.save(org=request.profile.org)
             if data.get("contacts"):
                 contacts_list = json.loads(data.get("contacts"))
-                contacts = Contact.objects.filter(id__in=contacts_list, org=request.profile.org)
+                contacts = Contact.objects.filter(
+                    id__in=contacts_list, org=request.profile.org
+                )
                 if contacts:
                     account_object.contacts.add(*contacts)
             if data.get("tags"):
@@ -215,14 +220,18 @@ class AccountsListView(APIView, LimitOffsetPagination):
 
 
 class AccountDetailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     serializer_class = AccountReadSerializer
 
     def get_object(self, pk):
         return get_object_or_404(Account, id=pk)
 
-    @extend_schema(tags=["Accounts"], parameters=swagger_params1.organization_params,request=AccountWriteSerializer)
+    @extend_schema(
+        tags=["Accounts"],
+        parameters=swagger_params1.organization_params,
+        request=AccountWriteSerializer,
+    )
     def put(self, request, pk, format=None):
         data = request.data
         account_object = self.get_object(pk=pk)
@@ -259,7 +268,9 @@ class AccountDetailView(APIView):
             account_object.contacts.clear()
             if data.get("contacts"):
                 contacts_list = json.loads(data.get("contacts"))
-                contacts = Contact.objects.filter(id__in=contacts_list, org=request.profile.org)
+                contacts = Contact.objects.filter(
+                    id__in=contacts_list, org=request.profile.org
+                )
                 if contacts:
                     account_object.contacts.add(*contacts)
 
@@ -323,7 +334,10 @@ class AccountDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             if self.request.profile != self.object.created_by:
                 return Response(
                     {
@@ -340,15 +354,21 @@ class AccountDetailView(APIView):
 
     @extend_schema(tags=["Accounts"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):
+        """Get account details by ID"""
+
         self.account = self.get_object(pk=pk)
+
         if self.account.org != request.profile.org:
             return Response(
                 {"error": True, "errors": "User company doesnot match with header...."},
-                status=status.HTTP_404_NOT_FOUND,
+                status=status.HTTP_403_FORBIDDEN,
             )
-        context = {}
-        context["account_obj"] = AccountSerializer(self.account).data
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+
+        # Permission check
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             if not (
                 (self.request.profile == self.account.created_by)
                 or (self.request.profile in self.account.assigned_to.all())
@@ -361,6 +381,13 @@ class AccountDetailView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+        # Build context data
+        context = {}
+        context["error"] = False
+        context["account_obj"] = AccountSerializer(self.account).data
+        # Add company logo URL for quick access
+        context["company_logo_url"] = self.account.company.logo_url if self.account.company else None
+
         comment_permission = False
         if (
             self.request.profile == self.account.created_by
@@ -369,11 +396,14 @@ class AccountDetailView(APIView):
         ):
             comment_permission = True
 
-        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
+        if self.request.profile.is_admin or self.request.profile.role in [
+            "ADMIN",
+            "MANAGER",
+        ]:
             users_mention = list(
-                Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-                    "user__email"
-                )
+                Profile.objects.filter(
+                    is_active=True, org=self.request.profile.org
+                ).values("user__email")
             )
         elif self.request.profile != self.account.created_by:
             if self.account.created_by:
@@ -382,11 +412,119 @@ class AccountDetailView(APIView):
                 users_mention = []
         else:
             users_mention = []
-        leads = Lead.objects.filter(org=self.request.profile.org).exclude(
+
+        # Get all leads (for general use)
+        leads = Lead.objects.filter(organization=self.request.profile.org).exclude(
             Q(status="converted") | Q(status="closed")
         )
+
+        # Get company information if linked
+        company_info = None
+        if self.account.company:
+            from companies.serializer import CompanyDetailSerializer
+
+            company_info = CompanyDetailSerializer(self.account.company).data
+
+        # Get CLOSED WON opportunities linked to this account with detailed information
+        closed_won_opportunities = (
+            Opportunity.objects.filter(
+                account=self.account, stage="CLOSED WON", org=self.request.profile.org
+            )
+            .select_related("lead", "closed_by")
+            .prefetch_related("contacts", "assigned_to", "teams", "tags")
+        )
+
+        # Enhanced opportunity serialization with lead data
+        opportunities_data = []
+        for opportunity in closed_won_opportunities:
+            opp_data = OpportunitySerializer(opportunity).data
+
+            # Add lead information if available
+            if opportunity.lead:
+                opp_data["lead_info"] = {
+                    "id": str(opportunity.lead.id),
+                    "title": opportunity.lead.lead_title,
+                    "status": opportunity.lead.status,
+                    "source": opportunity.lead.lead_source,
+                    "amount": opportunity.lead.amount,
+                    "probability": opportunity.lead.probability,
+                    "description": opportunity.lead.description,
+                    "notes": opportunity.lead.notes,
+                    "converted_at": opportunity.lead.converted_at,
+                    "created_at": opportunity.lead.created_at,
+                    "contact_info": None,
+                }
+
+                # Add contact information from lead if available
+                if opportunity.lead.contact:
+                    opp_data["lead_info"]["contact_info"] = {
+                        "id": str(opportunity.lead.contact.id),
+                        "first_name": opportunity.lead.contact.first_name,
+                        "last_name": opportunity.lead.contact.last_name,
+                        "email": opportunity.lead.contact.primary_email,
+                        "phone": str(opportunity.lead.contact.mobile_number)
+                        if opportunity.lead.contact.mobile_number
+                        else None,
+                        "title": opportunity.lead.contact.title,
+                        "description": opportunity.lead.contact.description,
+                    }
+
+            # Add additional opportunity details
+            opp_data["total_value"] = opportunity.amount
+            opp_data["close_date"] = opportunity.closed_on
+            opp_data["closed_by_info"] = None
+            if opportunity.closed_by:
+                opp_data["closed_by_info"] = {
+                    "id": str(opportunity.closed_by.id),
+                    "email": opportunity.closed_by.user.email,
+                    "role": opportunity.closed_by.role,
+                }
+
+            # Add contract and attachment info
+            opp_data["has_contract"] = bool(opportunity.contract_attachment)
+            opp_data["has_attachments"] = bool(opportunity.attachment_links)
+            opp_data["attachment_count"] = (
+                len(opportunity.attachment_links) if opportunity.attachment_links else 0
+            )
+
+            opportunities_data.append(opp_data)
+
+        # Calculate account summary statistics
+        total_won_value = sum(opp.amount or 0 for opp in closed_won_opportunities)
+        total_won_count = closed_won_opportunities.count()
+
+        # Get all opportunities for this account (not just closed won)
+        all_opportunities = Opportunity.objects.filter(
+            account=self.account, org=self.request.profile.org
+        )
+
+        account_summary = {
+            "total_opportunities": all_opportunities.count(),
+            "closed_won_opportunities": total_won_count,
+            "total_won_value": float(total_won_value),
+            "average_deal_size": float(total_won_value / total_won_count)
+            if total_won_count > 0
+            else 0,
+            "account_status": self.account.status,
+            "is_active": self.account.is_active,
+            "created_from_opportunity": bool(
+                self.account.company
+            ),  # Indicates if account was auto-created
+            "company_logo_url": self.account.company.logo_url if self.account.company else None,
+        }
+
         context.update(
             {
+                # Enhanced account info with company details
+                "company_info": company_info,
+                "account_summary": account_summary,
+                # CLOSED WON opportunities with detailed lead information
+                "closed_won_opportunities": opportunities_data,
+                # All opportunities for this account (for completeness)
+                "opportunity_list": OpportunitySerializer(
+                    all_opportunities, many=True
+                ).data,
+                # Existing data
                 "attachments": AttachmentsSerializer(
                     self.account.account_attachment.all(), many=True
                 ).data,
@@ -395,9 +533,6 @@ class AccountDetailView(APIView):
                 ).data,
                 "contacts": ContactSerializer(
                     self.account.contacts.all(), many=True
-                ).data,
-                "opportunity_list": OpportunitySerializer(
-                    Opportunity.objects.filter(account=self.account), many=True
                 ).data,
                 "users": ProfileSerializer(
                     Profile.objects.filter(
@@ -408,7 +543,7 @@ class AccountDetailView(APIView):
                 "cases": CaseSerializer(
                     self.account.accounts_cases.all(), many=True
                 ).data,
-               "teams" : TeamsSerializer(
+                "teams": TeamsSerializer(
                     Teams.objects.filter(org=self.request.profile.org), many=True
                 ).data,
                 "stages": STAGES,
@@ -429,14 +564,16 @@ class AccountDetailView(APIView):
                     self.account.sent_email.all(), many=True
                 ).data,
                 "users_mention": users_mention,
-               "leads" : LeadSerializer(leads, many=True).data,
-               "status" : ["open","close"]
+                "leads": LeadSerializer(leads, many=True).data,
+                "status": ["open", "close"],
             }
         )
         return Response(context)
 
     @extend_schema(
-        tags=["Accounts"], parameters=swagger_params1.organization_params,request=AccountDetailEditSwaggerSerializer
+        tags=["Accounts"],
+        parameters=swagger_params1.organization_params,
+        request=AccountDetailEditSwaggerSerializer,
     )
     def post(self, request, pk, **kwargs):
         data = request.data
@@ -450,7 +587,10 @@ class AccountDetailView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             if not (
                 (self.request.profile == self.account_obj.created_by)
                 or (self.request.profile in self.account_obj.assigned_to.all())
@@ -496,7 +636,7 @@ class AccountDetailView(APIView):
 
 class AccountCommentView(APIView):
     model = Comment
-    #authentication_classes = (CustomDualAuthentication,)
+    authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     serializer_class = AccountCommentEditSwaggerSerializer
 
@@ -504,7 +644,9 @@ class AccountCommentView(APIView):
         return self.model.objects.get(pk=pk)
 
     @extend_schema(
-        tags=["Accounts"], parameters=swagger_params1.organization_params,request=AccountCommentEditSwaggerSerializer
+        tags=["Accounts"],
+        parameters=swagger_params1.organization_params,
+        request=AccountCommentEditSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         data = request.data
@@ -558,7 +700,7 @@ class AccountCommentView(APIView):
 
 class AccountAttachmentView(APIView):
     model = Attachments
-    #authentication_classes = (CustomDualAuthentication,)
+    authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     serializer_class = AccountDetailEditSwaggerSerializer
 
@@ -585,12 +727,16 @@ class AccountAttachmentView(APIView):
 
 
 class AccountCreateMailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Account
     serializer_class = EmailWriteSerializer
 
-    @extend_schema(tags=["Accounts"], parameters=swagger_params1.organization_params,request=EmailWriteSerializer)
+    @extend_schema(
+        tags=["Accounts"],
+        parameters=swagger_params1.organization_params,
+        request=EmailWriteSerializer,
+    )
     def post(self, request, pk, *args, **kwargs):
         data = request.data
         scheduled_later = data.get("scheduled_later")
@@ -614,7 +760,9 @@ class AccountCreateMailView(APIView):
             if data.get("recipients"):
                 contacts = json.loads(data.get("recipients"))
                 for contact in contacts:
-                    obj_contact = Contact.objects.filter(id=contact, org=request.profile.org)
+                    obj_contact = Contact.objects.filter(
+                        id=contact, org=request.profile.org
+                    )
                     if obj_contact.exists():
                         email_obj.recipients.add(contact)
                     else:
