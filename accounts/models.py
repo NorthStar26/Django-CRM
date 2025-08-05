@@ -14,14 +14,13 @@ from common.base import BaseModel
 
 
 class Tags(BaseModel):
-    #a max_length constraint to prevent overly long tags
+    # a max_length constraint to prevent overly long tags
     name = models.CharField(max_length=50, unique=True)  # Increased from 20
-     # SlugField is more appropriate than CharField for slugs
+    # SlugField is more appropriate than CharField for slugs
     slug = models.SlugField(max_length=50, unique=True, blank=True)
 
     # a color field for UI differentiation
-    color = models.CharField(max_length=7, default='#000000')  # Hex color
-
+    color = models.CharField(max_length=7, default="#000000")  # Hex color
 
     class Meta:
         verbose_name = "Tag"
@@ -32,23 +31,26 @@ class Tags(BaseModel):
     def __str__(self):
         return f"{self.name}"
 
-
     def save(self, *args, **kwargs):
         self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
 
 class Account(BaseModel):
-
     ACCOUNT_STATUS_CHOICE = (("open", "Open"), ("close", "Close"))
 
-     # help_text for fields that might need clarification
-    name = models.CharField(pgettext_lazy("Name of Account", "Name"), max_length=64,
-                            help_text=_("The official name of the account/organization"))
+    # help_text for fields that might need clarification
+    name = models.CharField(
+        pgettext_lazy("Name of Account", "Name"),
+        max_length=64,
+        help_text=_("The official name of the account/organization"),
+    )
     email = models.EmailField()
 
     # Make explicitly blankable
-    phone = PhoneNumberField(null=True, blank=True, help_text=_("Primary contact number for the account"))
+    phone = PhoneNumberField(
+        null=True, blank=True, help_text=_("Primary contact number for the account")
+    )
     industry = models.CharField(
         _("Industry Type"), max_length=255, choices=INDCHOICES, blank=True, null=True
     )
@@ -89,6 +91,14 @@ class Account(BaseModel):
     )
     assigned_to = models.ManyToManyField(Profile, related_name="account_assigned_users")
     teams = models.ManyToManyField(Teams, related_name="account_teams")
+    company = models.ForeignKey(
+        "companies.CompanyProfile",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="accounts",
+        help_text=_("Company associated with this account"),
+    )
     org = models.ForeignKey(
         Org,
         on_delete=models.SET_NULL,
@@ -170,6 +180,7 @@ class AccountEmail(BaseModel):
 
     def __str__(self):
         return f"{self.message_subject}"
+
 
 class AccountEmailLog(BaseModel):
     """this model is used to track if the email is sent or not"""
