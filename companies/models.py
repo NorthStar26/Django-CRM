@@ -3,7 +3,12 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
-from django.core.validators import RegexValidator, EmailValidator, URLValidator, FileExtensionValidator
+from django.core.validators import (
+    RegexValidator,
+    EmailValidator,
+    URLValidator,
+    FileExtensionValidator,
+)
 
 from common.models import Org, Profile
 from common.base import BaseModel
@@ -12,20 +17,19 @@ from emails.models import Email
 from common.validators import validate_logo_size
 
 
-
 class CompanyProfile(BaseModel):
     name = models.CharField(
         _("Company Name"),
         max_length=255,
         blank=False,
         null=False,
-        db_index=True, # Indexing for faster lookups
+        db_index=True,  # Indexing for faster lookups
         validators=[
             RegexValidator(
-                regex=r'^[a-zA-Z0-9\s\-\.\&\(\)]+$',
-                message='Company name can only contain letters, numbers, spaces, hyphens, dots, ampersands, and parentheses'
+                regex=r"^[a-zA-Z0-9\s\-\.\&\(\)]+$",
+                message="Company name can only contain letters, numbers, spaces, hyphens, dots, ampersands, and parentheses",
             )
-        ]
+        ],
     )
 
     website = models.CharField(
@@ -36,10 +40,10 @@ class CompanyProfile(BaseModel):
         help_text=_("Website URL of the company"),
         validators=[
             URLValidator(
-                schemes=['http', 'https'],
-                message='Website must be a valid URL starting with http:// or https://'
+                schemes=["http", "https"],
+                message="Website must be a valid URL starting with http:// or https://",
             )
-        ]
+        ],
     )
 
     email = models.EmailField(
@@ -50,18 +54,16 @@ class CompanyProfile(BaseModel):
         db_index=True,  # Indexing for faster lookups
         validators=[
             EmailValidator(
-                message=_("Enter a valid email address."),
-                code='invalid_email'
+                message=_("Enter a valid email address."), code="invalid_email"
             )
-        ]
-
+        ],
     )
 
     phone = PhoneNumberField(
         _("Phone Number"),
         blank=False,
         null=False,
-        help_text="International format: +31234567890"
+        help_text="International format: +31234567890",
     )
 
     industry = models.CharField(
@@ -71,15 +73,15 @@ class CompanyProfile(BaseModel):
         blank=False,
         null=False,
         help_text=_("Select the industry type of the company"),
-        db_index=True # Indexing for faster lookups
+        db_index=True,  # Indexing for faster lookups
     )
 
     logo_url = models.URLField(
-    _("Company Logo URL"),
-    max_length=500,
-    null=True,
-    blank=True,
-    help_text=_("Cloudinary URL for the company logo")
+        _("Company Logo URL"),
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text=_("Cloudinary URL for the company logo"),
     )
 
     # Billing Address
@@ -90,10 +92,10 @@ class CompanyProfile(BaseModel):
         null=True,
         validators=[
             RegexValidator(
-                regex=r'^[a-zA-Z0-9\s\-\.\,\'\"]+$',
-                message='Street address contains invalid characters'
+                regex=r"^[a-zA-Z0-9\s\-\.\,\'\"]+$",
+                message="Street address contains invalid characters",
             )
-        ]
+        ],
     )
 
     billing_address_number = models.CharField(
@@ -103,10 +105,10 @@ class CompanyProfile(BaseModel):
         null=True,
         validators=[
             RegexValidator(
-                regex=r'^[a-zA-Z0-9\-\/\s]+$',
-                message='Address number can only contain letters, numbers, hyphens, slashes, and spaces'
+                regex=r"^[a-zA-Z0-9\-\/\s]+$",
+                message="Address number can only contain letters, numbers, hyphens, slashes, and spaces",
             )
-        ]
+        ],
     )
 
     billing_postcode = models.CharField(
@@ -116,10 +118,9 @@ class CompanyProfile(BaseModel):
         null=True,
         validators=[
             RegexValidator(
-                regex=r'^[A-Za-z0-9\s\-]+$',
-                message='Postcode format is invalid'
+                regex=r"^[A-Za-z0-9\s\-]+$", message="Postcode format is invalid"
             )
-        ]
+        ],
     )
 
     billing_city = models.CharField(
@@ -129,18 +130,14 @@ class CompanyProfile(BaseModel):
         null=True,
         validators=[
             RegexValidator(
-                regex=r'^[a-zA-Z\s\-\'\.]+$',
-                message='City name can only contain letters, spaces, hyphens, apostrophes, and dots'
+                regex=r"^[a-zA-Z\s\-\'\.]+$",
+                message="City name can only contain letters, spaces, hyphens, apostrophes, and dots",
             )
-        ]
+        ],
     )
 
     billing_country = models.CharField(
-        _("Billing Country"),
-        max_length=3,
-        choices=COUNTRIES,
-        blank=True,
-        null=True
+        _("Billing Country"), max_length=3, choices=COUNTRIES, blank=True, null=True
     )
     billing_state = models.CharField(
         _("Billing State/Province"),
@@ -149,13 +146,13 @@ class CompanyProfile(BaseModel):
         null=True,
         validators=[
             RegexValidator(
-                regex=r'^[a-zA-Z\s\-\'\.]+$',
-                message='State/Province name can only contain letters, spaces, hyphens, apostrophes, and dots'
+                regex=r"^[a-zA-Z\s\-\'\.]+$",
+                message="State/Province name can only contain letters, spaces, hyphens, apostrophes, and dots",
             )
-        ]
+        ],
     )
 
- # Control system
+    # Control system
     org = models.ForeignKey(
         Org,
         on_delete=models.SET_NULL,
@@ -163,7 +160,17 @@ class CompanyProfile(BaseModel):
         blank=True,
         related_name="companies",
         verbose_name=_("Organization"),
-        db_index=True
+        db_index=True,
+    )
+
+    # Account relationship - automatically created when opportunity is closed won
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_companies",
+        help_text=_("Account created for this company when opportunity is closed won"),
     )
 
     class Meta:
@@ -171,52 +178,51 @@ class CompanyProfile(BaseModel):
         verbose_name_plural = _("Company Profiles")
         db_table = "companies"
         ordering = ("-created_at",)
-        unique_together = [('name', 'org'), # Uniqueness of the name within the organization
-                           ('email', 'org'), # Uniqueness of email within the organization
-                           ('website', 'org')  # Uniqueness of website within the organization
-                           ]
+        unique_together = [
+            ("name", "org"),  # Uniqueness of the name within the organization
+            ("email", "org"),  # Uniqueness of email within the organization
+            ("website", "org"),  # Uniqueness of website within the organization
+        ]
         indexes = [
-            models.Index(fields=['name', 'org']),
-            models.Index(fields=['email', 'org']),
-            models.Index(fields=['website', 'org']),
-            models.Index(fields=['industry']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=["name", "org"]),
+            models.Index(fields=["email", "org"]),
+            models.Index(fields=["website", "org"]),
+            models.Index(fields=["industry"]),
+            models.Index(fields=["created_at"]),
         ]
 
-
     def clean(self):
-
         errors = {}
 
         if self.name:
             self.name = self.name.strip()
             if len(self.name) < 2:
-                errors['name'] = _("Company name must be at least 2 characters long")
+                errors["name"] = _("Company name must be at least 2 characters long")
             elif len(self.name) > 255:
-                errors['name'] = _("Company name cannot exceed 255 characters")
+                errors["name"] = _("Company name cannot exceed 255 characters")
 
         if not self.industry:
-            errors['industry'] = _("Industry is required")
+            errors["industry"] = _("Industry is required")
         elif self.industry not in dict(INDCHOICES):
-            errors['industry'] = _("Please select a valid industry")
+            errors["industry"] = _("Please select a valid industry")
 
         if self.email:
             self.email = self.email.strip().lower()
             # Check for corporate domains
-            forbidden_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com']
+            forbidden_domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]
             if any(domain in self.email for domain in forbidden_domains):
-                errors['email'] = _("Please use a business email address")
+                errors["email"] = _("Please use a business email address")
 
         # Validate address completeness
         billing_fields = [self.billing_street, self.billing_city, self.billing_country]
         billing_provided = [field for field in billing_fields if field]
 
         if billing_provided and len(billing_provided) < len(billing_fields):
-            errors['billing_address'] = _("If billing address is provided, street, city, and country are required")
+            errors["billing_address"] = _(
+                "If billing address is provided, street, city, and country are required"
+            )
         if errors:
             raise ValidationError(errors)
-
-
 
     def __str__(self):
         return f"{self.name}"
@@ -229,7 +235,7 @@ class CompanyProfile(BaseModel):
             self.billing_address_number,
             self.billing_city,
             self.billing_postcode,
-            self.get_billing_country_display() if self.billing_country else None
+            self.get_billing_country_display() if self.billing_country else None,
         ]
         return ", ".join([part for part in address_parts if part])
 
