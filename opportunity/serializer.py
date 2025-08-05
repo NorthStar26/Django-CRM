@@ -374,6 +374,22 @@ class OpportunityAttachmentCreateSwaggerSerializer(serializers.Serializer):
         required=False,
     )
 class OpportunityDashboardSerializer(serializers.ModelSerializer):
+    company_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Opportunity
-        fields = ("id", "name", "created_at", "updated_at", "stage")
+        fields = ["id", "name", "created_at", "updated_at", "stage", "company_name"]
+
+    def get_company_name(self, obj):
+        # Сначала проверяем через lead
+        if hasattr(obj, "lead") and obj.lead and hasattr(obj.lead, "company") and obj.lead.company:
+            return obj.lead.company.name
+
+        # Если нет lead, проверяем первый контакт
+        elif obj.contacts.exists():
+            contact = obj.contacts.first()
+            if contact and contact.company:
+                return contact.company.name
+
+        return ""
+
