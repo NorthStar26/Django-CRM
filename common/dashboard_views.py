@@ -164,7 +164,7 @@ class DashboardSummaryView(APIView):
 
         # Pipeline Value (total) - использует отфильтрованные по created_at данные
         total_pipeline_value = filtered_opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
-        total_pipeline_value = float(f"{total_pipeline_value:.3f}")  # Всегда 3 знака после запятой
+        total_pipeline_value = float(f"{total_pipeline_value:.0f}")  # Всегда 0 знаков после запятой
 
         # Leads by Status - использует отфильтрованные по created_at данные
         leads_by_status = filtered_leads_qs.values("status").annotate(count=Count("id"))
