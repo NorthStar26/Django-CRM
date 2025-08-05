@@ -62,7 +62,7 @@ class DashboardSummaryView(APIView):
         opportunity_stage = request.query_params.get("opportunity_stage")
         days = request.query_params.get("days")
 
-        # --- фильтры для дат ---
+        # --- Фильтры для дат ---
         date_filter = {}
         if days:
             try:
@@ -83,8 +83,11 @@ class DashboardSummaryView(APIView):
             lead_filter = Q(created_by=user) | Q(assigned_to=profile)
             opportunity_filter = Q(created_by=user) | Q(assigned_to=profile)
 
+        # -------------- ДИНАМИЧЕСКИЕ СЧЕТЧИКИ (С фильтром по дате) --------------
+
         # --- Companies ---
         companies_count = CompanyProfile.objects.filter(org=org, **company_filter, **date_filter).count()
+
         # --- Contacts ---
         contacts_count = Contact.objects.filter(org=org, **contact_filter, **date_filter).count()
         # --- Accounts ---
@@ -94,16 +97,20 @@ class DashboardSummaryView(APIView):
         accounts_count = accounts_qs.count()
         # --- Leads ---
         leads_qs = Lead.objects.filter(organization=org, **date_filter)
+        # --- Filtered Leads queryset (с date_filter по created_at) ---
+        filtered_leads_qs = Lead.objects.filter(organization=org, **date_filter)
         if not is_admin:
-            leads_qs = leads_qs.filter(lead_filter).distinct()
+            filtered_leads_qs = filtered_leads_qs.filter(lead_filter).distinct()
         if lead_status:
+
             leads_qs = leads_qs.filter(status=lead_status)
         leads_count = leads_qs.count()
         # --- Opportunities ---
  # --- Opportunities ---
         opps_qs = Opportunity.objects.filter(org=org, **date_filter)
+
         if not is_admin:
-            opps_qs = opps_qs.filter(opportunity_filter).distinct()
+            filtered_opps_qs = filtered_opps_qs.filter(opportunity_filter).distinct()
         if opportunity_stage:
             opps_qs = opps_qs.filter(stage=opportunity_stage)
         else:
@@ -111,23 +118,51 @@ class DashboardSummaryView(APIView):
             opps_qs = opps_qs.exclude(stage__in=["CLOSE", "CLOSED LOST", "CLOSED WON"])
         opportunities_count = opps_qs.count()
 
-        # Recent Leads
-        recent_leads_qs = leads_qs.order_by("-updated_at")[:5]
+        # Recent Leads (фильтр по updated_at)
+        if days:
+            date_from = datetime.now() - timedelta(days=days)
+            recent_leads_qs = Lead.objects.filter(
+                organization=org,
+                updated_at__gte=date_from  # Используем updated_at вместо created_at
+            )
+            if not is_admin:
+                recent_leads_qs = recent_leads_qs.filter(lead_filter).distinct()
+            if lead_status:
+                recent_leads_qs = recent_leads_qs.filter(status=lead_status)
+        else:
+            recent_leads_qs = filtered_leads_qs
+
+        recent_leads_qs = recent_leads_qs.order_by("-updated_at")[:5]
         recent_leads = LeadDashboardSerializer(recent_leads_qs, many=True).data
-        # Recent Opportunities
-        recent_opps_qs = opps_qs.order_by("-updated_at")[:5]
+
+        # Recent Opportunities (фильтр по updated_at)
+        if days:
+            date_from = datetime.now() - timedelta(days=days)
+            recent_opps_qs = Opportunity.objects.filter(
+                org=org,
+                updated_at__gte=date_from  # Используем updated_at вместо created_at
+            )
+            if not is_admin:
+                recent_opps_qs = recent_opps_qs.filter(opportunity_filter).distinct()
+            if opportunity_stage:
+                recent_opps_qs = recent_opps_qs.filter(stage=opportunity_stage)
+            else:
+                recent_opps_qs = recent_opps_qs.exclude(stage__in=["CLOSE", "CLOSED LOST", "CLOSED WON"])
+        else:
+            recent_opps_qs = filtered_opps_qs
+
+        recent_opps_qs = recent_opps_qs.order_by("-updated_at")[:5]
         recent_opps = OpportunityDashboardSerializer(recent_opps_qs, many=True).data
 
-        # Pipeline Value (total)
-        total_pipeline_value = opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
-        total_pipeline_value = round(total_pipeline_value, 3)
+        # -------------- ДАННЫЕ ДЛЯ АНАЛИТИКИ (с фильтром по created_at) --------------
 
-        # Leads by Status
-        leads_by_status = (
-            leads_qs.values("status").annotate(count=Count("id"))
-        )
+        # Pipeline Value (total) - использует отфильтрованные по created_at данные
+        total_pipeline_value = filtered_opps_qs.aggregate(total=Sum("expected_revenue"))["total"] or 0
+        total_pipeline_value = float(f"{total_pipeline_value:.0f}")  # Всегда 0 знаков после запятой
+
+        # Leads by Status - использует отфильтрованные по created_at данные
+        leads_by_status = filtered_leads_qs.values("status").annotate(count=Count("id"))
         leads_status = {item["status"]: item["count"] for item in leads_by_status}
-
        # Opportunities by Stage
         opps_by_stage = (
             opps_qs.values("stage").annotate(count=Count("id"))
@@ -153,3 +188,4 @@ class DashboardSummaryView(APIView):
         for choice in OPPORTUNITY_STAGES
     ],
 })
+
