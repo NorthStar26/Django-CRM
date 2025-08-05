@@ -27,6 +27,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "case_type",
             "closed_on",
             "description",
+            "reason",
             "created_by",
             "created_at",
             "is_active",
@@ -69,6 +70,7 @@ class CaseCreateSerializer(serializers.ModelSerializer):
             "status",
             "priority",
             "description",
+            "reason",
             "created_by",
             "created_at",
             "is_active",
@@ -92,6 +94,7 @@ class CaseCreateSwaggerSerializer(serializers.ModelSerializer):
             "case_attachment",
             "contacts",
             "description",
+            "reason",
         )
 
 class CaseDetailEditSwaggerSerializer(serializers.Serializer):
