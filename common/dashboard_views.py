@@ -15,6 +15,7 @@ from common.models import Org
 from datetime import datetime, timedelta
 from common.utils import LEAD_STATUS
 from common.utils import LEAD_STATUS
+from accounts.models import Account
 
 OPPORTUNITY_STAGES = [
     ("QUALIFICATION", "QUALIFICATION"),
@@ -86,6 +87,11 @@ class DashboardSummaryView(APIView):
         companies_count = CompanyProfile.objects.filter(org=org, **company_filter, **date_filter).count()
         # --- Contacts ---
         contacts_count = Contact.objects.filter(org=org, **contact_filter, **date_filter).count()
+        # --- Accounts ---
+        accounts_qs = Account.objects.filter(org=org, **date_filter)
+        if not is_admin:
+            accounts_qs = accounts_qs.filter(Q(created_by=user) | Q(assigned_to=profile)).distinct()
+        accounts_count = accounts_qs.count()
         # --- Leads ---
         leads_qs = Lead.objects.filter(organization=org, **date_filter)
         if not is_admin:
@@ -127,6 +133,7 @@ class DashboardSummaryView(APIView):
         return Response({
     "companies_count": companies_count,
     "contacts_count": contacts_count,
+    "accounts_count": accounts_count,
     "leads_count": leads_count,
     "opportunities_count": opportunities_count,
     "total_pipeline_value": total_pipeline_value,
