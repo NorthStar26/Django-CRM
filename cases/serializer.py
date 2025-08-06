@@ -35,6 +35,7 @@ class CaseSerializer(serializers.ModelSerializer):
             "case_type",
             "closed_on",
             "description",
+            "reason",
             "created_by",
             "created_at",
             "is_active",
@@ -63,7 +64,7 @@ class CaseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Case
         fields = '__all__'
- 
+
 
     def get_opportunity_data(self, obj):
         if obj.opportunity:
@@ -87,12 +88,12 @@ class CaseListSerializer(serializers.ModelSerializer):
                 } if obj.opportunity.lead else None
             }
         return None
-    
+
 
 class CaseSwaggerUISerializer(serializers.ModelSerializer):
     class Meta:
         model = Case
-        fields = ["name", "industry", "contact", "org"] 
+        fields = ["name", "industry", "contact", "org"]
 
 
 
@@ -124,6 +125,7 @@ class CaseCreateSerializer(serializers.ModelSerializer):
             "status",
             "priority",
             "description",
+            "reason",
             "created_by",
             "created_at",
             "is_active",
@@ -131,6 +133,7 @@ class CaseCreateSerializer(serializers.ModelSerializer):
             "org",
             "created_on_arrow",
         )
+
 
 class CaseCreateSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -147,11 +150,14 @@ class CaseCreateSwaggerSerializer(serializers.ModelSerializer):
             "case_attachment",
             "contacts",
             "description",
+            "reason",
         )
+
 
 class CaseDetailEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
     case_attachment = serializers.FileField()
+
 
 class CaseCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
