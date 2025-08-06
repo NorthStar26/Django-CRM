@@ -2,10 +2,12 @@ from rest_framework import serializers
 
 from accounts.serializer import AccountSerializer
 from cases.models import Case
-from common.serializer import OrganizationSerializer, ProfileSerializer,UserSerializer
+from common.serializer import OrganizationSerializer, ProfileSerializer, UserSerializer
 from contacts.serializer import ContactSerializer
 from teams.serializer import TeamsSerializer
-from opportunity.serializer import OpportunitySerializer  # import your Opportunity serializer
+from opportunity.serializer import (
+    OpportunitySerializer,
+)  # import your Opportunity serializer
 
 
 class CaseSerializer(serializers.ModelSerializer):
@@ -42,7 +44,7 @@ class CaseSerializer(serializers.ModelSerializer):
 
 
 class CaseCreateSerializer(serializers.ModelSerializer):
-    closed_on = serializers.DateField
+    closed_on = serializers.DateField()
 
     def __init__(self, *args, **kwargs):
         request_obj = kwargs.pop("request_obj", None)
@@ -79,6 +81,7 @@ class CaseCreateSerializer(serializers.ModelSerializer):
             "created_on_arrow",
         )
 
+
 class CaseCreateSwaggerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Case
@@ -97,10 +100,11 @@ class CaseCreateSwaggerSerializer(serializers.ModelSerializer):
             "reason",
         )
 
+
 class CaseDetailEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
     case_attachment = serializers.FileField()
 
+
 class CaseCommentEditSwaggerSerializer(serializers.Serializer):
     comment = serializers.CharField()
-
