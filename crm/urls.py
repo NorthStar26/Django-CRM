@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/", include("common.app_urls", namespace="common_urls")),
     path("api/companies/", include("companies.urls")),
     path("api/contacts/", include("contacts.urls")),
+    path("api/cases/", include("cases.urls", namespace="api_cases")),
 
     # path("api/leads/", include("leads.urls")),
     path(
