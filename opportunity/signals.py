@@ -93,7 +93,7 @@ def create_case_for_lost_opportunity(sender, instance, created, **kwargs):
         print("Opportunity reason at signal:", instance.reason)
 
         case = Case.objects.create(
-            name=f"Lost Opportunity - {instance.name}",
+            name=instance.name,
             case_type="Lost Deal",
             priority="Normal",
             status=False,
