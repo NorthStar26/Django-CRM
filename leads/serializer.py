@@ -342,7 +342,7 @@ class LeadDashboardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Lead
-        fields = ["id", "status", "created_at", "updated_at", "contact_name", "company_name"]
+        fields = ["id", "status", "created_at", "updated_at", "contact_name", "company_name","lead_title"]
 
     def get_contact_name(self, obj):
         if obj.contact:
