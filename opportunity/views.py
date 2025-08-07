@@ -36,9 +36,13 @@ class OpportunityListView(APIView, LimitOffsetPagination):
 
     def get_context_data(self, **kwargs):
         params = self.request.query_params
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
-            "-id"
-        )
+        # Include all opportunities regardless of stage (including CLOSED WON and CLOSED LOST)
+        queryset = self.model.objects.filter(org=self.request.profile.org).select_related(
+            'created_by', 'closed_by', 'account', 'lead'
+        ).prefetch_related(
+            'assigned_to', 'contacts', 'teams', 'tags', 'opportunity_attachment',
+            'opportunity_comments__commented_by'
+        ).order_by("-id")
         accounts = Account.objects.filter(org=self.request.profile.org)
         contacts = Contact.objects.filter(org=self.request.profile.org)
         if (
@@ -73,26 +77,80 @@ class OpportunityListView(APIView, LimitOffsetPagination):
                 queryset = queryset.filter(tags__in=params.get("tags")).distinct()
 
         context = {}
+
+        # Separate opportunities by status
+        # Active opportunities (excluding CLOSED WON and CLOSED LOST)
+        active_queryset = queryset.exclude(stage__in=["CLOSED WON", "CLOSED LOST"])
         results_opportunities = self.paginate_queryset(
-            queryset.distinct(), self.request, view=self
+            active_queryset.distinct(), self.request, view=self
         )
         opportunities = OpportunitySerializer(results_opportunities, many=True).data
         if results_opportunities:
-            offset = queryset.filter(id__gte=results_opportunities[-1].id).count()
-            if offset == queryset.count():
+            offset = active_queryset.filter(
+                id__gte=results_opportunities[-1].id
+            ).count()
+            if offset == active_queryset.count():
                 offset = None
         else:
             offset = 0
+
+        # CLOSED WON opportunities
+        closed_won_queryset = queryset.filter(stage="CLOSED WON")
+        results_closed_won = self.paginate_queryset(
+            closed_won_queryset.distinct(), self.request, view=self
+        )
+        closed_won_opportunities = OpportunitySerializer(
+            results_closed_won, many=True
+        ).data
+        if results_closed_won:
+            closed_won_offset = closed_won_queryset.filter(
+                id__gte=results_closed_won[-1].id
+            ).count()
+            if closed_won_offset == closed_won_queryset.count():
+                closed_won_offset = None
+        else:
+            closed_won_offset = 0
+
+        # CLOSED LOST opportunities
+        closed_lost_queryset = queryset.filter(stage="CLOSED LOST")
+        results_closed_lost = self.paginate_queryset(
+            closed_lost_queryset.distinct(), self.request, view=self
+        )
+        closed_lost_opportunities = OpportunitySerializer(
+            results_closed_lost, many=True
+        ).data
+        if results_closed_lost:
+            closed_lost_offset = closed_lost_queryset.filter(
+                id__gte=results_closed_lost[-1].id
+            ).count()
+            if closed_lost_offset == closed_lost_queryset.count():
+                closed_lost_offset = None
+        else:
+            closed_lost_offset = 0
+
         context["per_page"] = 10
         page_number = (int(self.offset / 10) + 1,)
         context["page_number"] = page_number
         context.update(
             {
-                "opportunities_count": self.count,
+                "opportunities_count": active_queryset.count(),  # Active opportunities count
                 "offset": offset,
+                "closed_won_count": closed_won_queryset.count(),
+                "closed_lost_count": closed_lost_queryset.count(),
+                "total_opportunities_count": queryset.count(),  # Total count of all opportunities
             }
         )
         context["opportunities"] = opportunities
+        context["closed_won_opportunities"] = {
+            "offset": closed_won_offset,
+            "opportunities": closed_won_opportunities,
+            "total_count": closed_won_queryset.count(),
+        }
+        context["closed_lost_opportunities"] = {
+            "offset": closed_lost_offset,
+            "opportunities": closed_lost_opportunities,
+            "total_count": closed_lost_queryset.count(),
+        }
         context["accounts_list"] = AccountSerializer(accounts, many=True).data
         context["contacts_list"] = ContactSerializer(contacts, many=True).data
         context["tags"] = TagsSerailizer(Tags.objects.filter(), many=True).data
@@ -588,9 +646,6 @@ class OpportunityCommentView(APIView):
             },
             status=status.HTTP_403_FORBIDDEN,
         )
-
-
-from common.serializer import AttachmentsSerializer
 
 
 class OpportunityAttachmentView(APIView):
@@ -1120,4 +1175,75 @@ class OpportunityPipelineView(APIView):
         return Response(
             {"error": True, "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class OpportunityCommentCreateView(APIView):
+    """
+    Create a new comment for an opportunity
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+        request=OpportunityCommentEditSwaggerSerializer,
+        responses={
+            200: {"description": "Comment created successfully"},
+            400: {"description": "Invalid data"},
+            403: {"description": "Permission denied"},
+            404: {"description": "Opportunity not found"},
+        },
+    )
+    def post(self, request, pk, format=None):
+        """
+        Create a new comment for the specified opportunity
+        """
+        try:
+            opportunity = Opportunity.objects.get(pk=pk, org=request.profile.org)
+        except Opportunity.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Opportunity not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check permissions
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
+            if not (
+                (request.profile == opportunity.created_by)
+                or (request.profile in opportunity.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to comment on this opportunity",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        comment_text = request.data.get("comment", "").strip()
+        if not comment_text:
+            return Response(
+                {"error": True, "errors": {"comment": "Comment cannot be empty"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create the comment
+        comment = Comment.objects.create(
+            opportunity=opportunity,
+            comment=comment_text,
+            commented_by=request.profile,
+        )
+
+        return Response(
+            {
+                "error": False,
+                "message": "Comment created successfully",
+                "comment": CommentSerializer(comment).data,
+            },
+            status=status.HTTP_201_CREATED,
         )

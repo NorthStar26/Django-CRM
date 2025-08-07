@@ -8,5 +8,6 @@ urlpatterns = [
     path("", views.CaseListView.as_view()),
     path("<str:pk>/", views.CaseDetailView.as_view()),
     path("comment/<str:pk>/", views.CaseCommentView.as_view()),
+    path("<str:pk>/comment/", views.CaseCommentCreateView.as_view()),
     path("attachment/<str:pk>/", views.CaseAttachmentView.as_view()),
 ]

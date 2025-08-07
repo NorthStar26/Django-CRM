@@ -270,7 +270,7 @@ class AccountDetailView(APIView):
                 and not self.request.profile.is_admin
             ):
                 if not (
-                    (self.request.profile == account_object.created_by)
+                    (self.request.user == account_object.created_by)
                     or (self.request.profile in account_object.assigned_to.all())
                 ):
                     return Response(
@@ -358,7 +358,7 @@ class AccountDetailView(APIView):
             self.request.profile.role not in ["ADMIN", "MANAGER"]
             and not self.request.profile.is_admin
         ):
-            if self.request.profile != self.object.created_by:
+            if self.request.user != self.object.created_by:
                 return Response(
                     {
                         "error": True,
@@ -390,7 +390,7 @@ class AccountDetailView(APIView):
             and not self.request.profile.is_admin
         ):
             if not (
-                (self.request.profile == self.account.created_by)
+                (self.request.user == self.account.created_by)
                 or (self.request.profile in self.account.assigned_to.all())
             ):
                 return Response(
@@ -412,7 +412,7 @@ class AccountDetailView(APIView):
 
         comment_permission = False
         if (
-            self.request.profile == self.account.created_by
+            self.request.user == self.account.created_by
             or self.request.profile.is_admin
             or self.request.profile.role in ["ADMIN", "MANAGER"]
         ):
@@ -427,9 +427,9 @@ class AccountDetailView(APIView):
                     is_active=True, org=self.request.profile.org
                 ).values("user__email")
             )
-        elif self.request.profile != self.account.created_by:
+        elif self.request.user != self.account.created_by:
             if self.account.created_by:
-                users_mention = [{"username": self.account.created_by.user.email}]
+                users_mention = [{"user__email": self.account.created_by.email}]
             else:
                 users_mention = []
         else:
@@ -618,7 +618,7 @@ class AccountDetailView(APIView):
             and not self.request.profile.is_admin
         ):
             if not (
-                (self.request.profile == self.account_obj.created_by)
+                (self.request.user == self.account_obj.created_by)
                 or (self.request.profile in self.account_obj.assigned_to.all())
             ):
                 return Response(
@@ -736,7 +736,7 @@ class AccountAttachmentView(APIView):
         if (
             request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
-            or request.profile == self.object.created_by
+            or request.user == self.object.created_by
         ):
             self.object.delete()
             return Response(
