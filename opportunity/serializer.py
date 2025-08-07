@@ -51,6 +51,7 @@ class OpportunitySerializer(serializers.ModelSerializer):
     opportunity_attachment = AttachmentsSerializer(many=True, read_only=True)
     lead = serializers.SerializerMethodField()
     feedback = serializers.CharField(allow_blank=True, required=False)
+    comments = serializers.SerializerMethodField()
 
 
     class Meta:
@@ -86,7 +87,8 @@ class OpportunitySerializer(serializers.ModelSerializer):
             "company_name",
             "lead",
             "feedback",
-            "feedback"
+            "feedback",
+            "comments"
         )
 
     def get_days_to_close(self, obj):
@@ -127,6 +129,12 @@ class OpportunitySerializer(serializers.ModelSerializer):
 
             return LeadSerializer(obj.lead).data
         return None
+
+    def get_comments(self, obj):
+        """Return comments for this opportunity"""
+        from common.serializer import CommentSerializer
+        comments = obj.opportunity_comments.all().order_by('-created_at')
+        return CommentSerializer(comments, many=True).data
 
 
 class OpportunityCreateSerializer(serializers.ModelSerializer):

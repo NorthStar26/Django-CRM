@@ -37,9 +37,12 @@ class OpportunityListView(APIView, LimitOffsetPagination):
     def get_context_data(self, **kwargs):
         params = self.request.query_params
         # Include all opportunities regardless of stage (including CLOSED WON and CLOSED LOST)
-        queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
-            "-id"
-        )
+        queryset = self.model.objects.filter(org=self.request.profile.org).select_related(
+            'created_by', 'closed_by', 'account', 'lead'
+        ).prefetch_related(
+            'assigned_to', 'contacts', 'teams', 'tags', 'opportunity_attachment',
+            'opportunity_comments__commented_by'
+        ).order_by("-id")
         accounts = Account.objects.filter(org=self.request.profile.org)
         contacts = Contact.objects.filter(org=self.request.profile.org)
         if (
@@ -1172,4 +1175,75 @@ class OpportunityPipelineView(APIView):
         return Response(
             {"error": True, "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class OpportunityCommentCreateView(APIView):
+    """
+    Create a new comment for an opportunity
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Opportunities"],
+        parameters=swagger_params1.organization_params,
+        request=OpportunityCommentEditSwaggerSerializer,
+        responses={
+            200: {"description": "Comment created successfully"},
+            400: {"description": "Invalid data"},
+            403: {"description": "Permission denied"},
+            404: {"description": "Opportunity not found"},
+        },
+    )
+    def post(self, request, pk, format=None):
+        """
+        Create a new comment for the specified opportunity
+        """
+        try:
+            opportunity = Opportunity.objects.get(pk=pk, org=request.profile.org)
+        except Opportunity.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Opportunity not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check permissions
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.user.is_superuser
+        ):
+            if not (
+                (request.profile == opportunity.created_by)
+                or (request.profile in opportunity.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to comment on this opportunity",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        comment_text = request.data.get("comment", "").strip()
+        if not comment_text:
+            return Response(
+                {"error": True, "errors": {"comment": "Comment cannot be empty"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create the comment
+        comment = Comment.objects.create(
+            opportunity=opportunity,
+            comment=comment_text,
+            commented_by=request.profile,
+        )
+
+        return Response(
+            {
+                "error": False,
+                "message": "Comment created successfully",
+                "comment": CommentSerializer(comment).data,
+            },
+            status=status.HTTP_201_CREATED,
         )
