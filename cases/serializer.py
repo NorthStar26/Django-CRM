@@ -61,6 +61,7 @@ class CaseListSerializer(serializers.ModelSerializer):
     opportunity_name = serializers.CharField(source="opportunity.name", read_only=True)
     opportunity_data = serializers.SerializerMethodField()
     created_by = UserSerializer(read_only=True)
+    assigned_to = ProfileSerializer(many=True, read_only=True)
     expected_revenue = serializers.DecimalField(
         source="opportunity.expected_revenue",
         max_digits=12,
