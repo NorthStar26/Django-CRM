@@ -4,16 +4,10 @@ from common.serializer import OrganizationSerializer, ProfileSerializer, UserSer
 from contacts.serializer import ContactSerializer
 from teams.serializer import TeamsSerializer
 from opportunity.serializer import OpportunitySerializer
-from accounts.models import Account
-from common.models import Profile
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'email', 'first_name', 'last_name']
 
 class CaseSerializer(serializers.ModelSerializer):
     account = serializers.SerializerMethodField()
@@ -47,24 +41,36 @@ class CaseSerializer(serializers.ModelSerializer):
             "created_on_arrow",
             "opportunity",
             "contract",
-            "reason"
+            "reason",
         )
 
-
     def get_created_on_arrow(self, obj):
-        return obj.created_on_arrow if hasattr(obj, 'created_on_arrow') else None
+        return obj.created_on_arrow if hasattr(obj, "created_on_arrow") else None
+
+    def get_account(self, obj):
+        if obj.account:
+            from accounts.serializer import AccountSerializer
+
+            return AccountSerializer(obj.account).data
+        return None
+
 
 class CaseListSerializer(serializers.ModelSerializer):
     priority = serializers.CharField()
-    account_name = serializers.CharField(source='account.name', read_only=True)
-    opportunity_name = serializers.CharField(source='opportunity.name', read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True)
+    opportunity_name = serializers.CharField(source="opportunity.name", read_only=True)
     opportunity_data = serializers.SerializerMethodField()
     created_by = UserSerializer(read_only=True)
-    expected_revenue = serializers.DecimalField(source='opportunity.expected_revenue', max_digits=12, decimal_places=2, read_only=True)
+    expected_revenue = serializers.DecimalField(
+        source="opportunity.expected_revenue",
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+
     class Meta:
         model = Case
-        fields = '__all__'
-
+        fields = "__all__"
 
     def get_opportunity_data(self, obj):
         if obj.opportunity:
@@ -75,17 +81,35 @@ class CaseListSerializer(serializers.ModelSerializer):
                 "amount": obj.opportunity.amount,
                 "lead": {
                     "id": obj.opportunity.lead.id if obj.opportunity.lead else None,
-                    "name": obj.opportunity.lead.lead_title if obj.opportunity.lead else None,
+                    "name": obj.opportunity.lead.lead_title
+                    if obj.opportunity.lead
+                    else None,
                     "contact": {
-                        "id": obj.opportunity.lead.contact.id if obj.opportunity.lead and obj.opportunity.lead.contact else None,
-                        "name": f"{obj.opportunity.lead.contact.first_name} {obj.opportunity.lead.contact.last_name}" if obj.opportunity.lead and obj.opportunity.lead.contact else None
-                    } if obj.opportunity.lead else None,
+                        "id": obj.opportunity.lead.contact.id
+                        if obj.opportunity.lead and obj.opportunity.lead.contact
+                        else None,
+                        "name": f"{obj.opportunity.lead.contact.first_name} {obj.opportunity.lead.contact.last_name}"
+                        if obj.opportunity.lead and obj.opportunity.lead.contact
+                        else None,
+                    }
+                    if obj.opportunity.lead
+                    else None,
                     "company": {
-                        "id": obj.opportunity.lead.company.id if obj.opportunity.lead and obj.opportunity.lead.company else None,
-                        "name": obj.opportunity.lead.company.name if obj.opportunity.lead and obj.opportunity.lead.company else None,
-                        "industry": obj.opportunity.lead.company.industry if obj.opportunity.lead and obj.opportunity.lead.company else None
-                    } if obj.opportunity.lead else None
-                } if obj.opportunity.lead else None
+                        "id": obj.opportunity.lead.company.id
+                        if obj.opportunity.lead and obj.opportunity.lead.company
+                        else None,
+                        "name": obj.opportunity.lead.company.name
+                        if obj.opportunity.lead and obj.opportunity.lead.company
+                        else None,
+                        "industry": obj.opportunity.lead.company.industry
+                        if obj.opportunity.lead and obj.opportunity.lead.company
+                        else None,
+                    }
+                    if obj.opportunity.lead
+                    else None,
+                }
+                if obj.opportunity.lead
+                else None,
             }
         return None
 
@@ -94,7 +118,6 @@ class CaseSwaggerUISerializer(serializers.ModelSerializer):
     class Meta:
         model = Case
         fields = ["name", "industry", "contact", "org"]
-
 
 
 class CaseCreateSerializer(serializers.ModelSerializer):
