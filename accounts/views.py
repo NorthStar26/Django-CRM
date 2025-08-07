@@ -78,8 +78,8 @@ class AccountsListView(APIView, LimitOffsetPagination):
                 queryset = queryset.filter(name__icontains=params.get("name"))
             if params.get("city"):
                 queryset = queryset.filter(billing_city__contains=params.get("city"))
-            # if params.get("industry"):
-            #     queryset = queryset.filter(industry__icontains=params.get("industry"))
+            if params.get("industry"):
+                queryset = queryset.filter(industry__icontains=params.get("industry"))
             if params.get("tags"):
                 queryset = queryset.filter(tags__in=params.get("tags")).distinct()
 
@@ -95,21 +95,15 @@ class AccountsListView(APIView, LimitOffsetPagination):
         else:
             offset = 0
         accounts_open = AccountSerializer(results_accounts_open, many=True).data
-        # filter accounts based on industry
-        if params.get("industry"):
-            accounts_open = [
-                account
-                for account in accounts_open
-                if account["contacts"][0]["company"]["industry"]
-                == params.get("industry")
-            ]
 
-        # filter by contact id
+        # filter by contact id (post-serialization filtering needed for complex nested data)
         if params.get("contact_id"):
             accounts_open = [
                 account
                 for account in accounts_open
-                if params.get("contact_id") == account["contacts"][0]["id"]
+                if account.get("contacts")
+                and len(account["contacts"]) > 0
+                and params.get("contact_id") == account["contacts"][0].get("id")
             ]
 
         context["per_page"] = 10
