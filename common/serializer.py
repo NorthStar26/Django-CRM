@@ -35,6 +35,19 @@ class SocialLoginSerializer(serializers.Serializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    commented_by_user = serializers.SerializerMethodField()
+
+    def get_commented_by_user(self, obj):
+        if obj.commented_by and obj.commented_by.user:
+            return {
+                "id": obj.commented_by.id,
+                "email": obj.commented_by.user.email,
+                "first_name": obj.commented_by.user.first_name,
+                "last_name": obj.commented_by.user.last_name,
+                "profile_pic": obj.commented_by.user.profile_pic,
+            }
+        return None
+
     class Meta:
         model = Comment
         fields = (
@@ -42,6 +55,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "comment",
             "commented_on",
             "commented_by",
+            "commented_by_user",
             "account",
             "lead",
             "opportunity",
@@ -215,15 +229,15 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "profile_pic"]
 
+
 class UserImageSerializer(serializers.Serializer):
     profile_pic = serializers.CharField(
-        allow_null=True, 
+        allow_null=True,
         required=False,
-        help_text="Set to null or empty string to remove profile picture"
+        help_text="Set to null or empty string to remove profile picture",
     )
     email = serializers.EmailField(
-        required=True,
-        help_text="User's email for verification"
+        required=True, help_text="User's email for verification"
     )
 
     def validate_profile_pic(self, value):
@@ -232,6 +246,7 @@ class UserImageSerializer(serializers.Serializer):
             return None
         # Add any additional validation for the image URL if needed
         return value
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     address = BillingAddressSerializer(
