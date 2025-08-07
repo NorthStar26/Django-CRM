@@ -962,11 +962,16 @@ class OpportunityPipelineView(APIView):
             ),
         }
 
+        # Get comments for this opportunity
+        comments = opportunity.opportunity_comments.all().order_by('-created_at')
+        comments_serializer = CommentSerializer(comments, many=True)
+
         return Response(
             {
                 "error": False,
                 "opportunity": serializer.data,
                 "pipeline_metadata": pipeline_metadata,
+                "comments": comments_serializer.data,
             }
         )
 
