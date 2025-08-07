@@ -164,7 +164,7 @@ class TaskDetailView(APIView):
                 )
             )
         elif self.request.profile != self.task_obj.created_by:
-            users_mention = [{"username": self.task_obj.created_by.user.email}]
+            users_mention = [{"username": self.task_obj.created_by.email}]
         else:
             users_mention = list(
                 self.task_obj.assigned_to.all().values("user__email")

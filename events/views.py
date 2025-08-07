@@ -241,7 +241,7 @@ class EventDetailView(APIView):
                 ).values("user__email")
             )
         elif self.request.profile != self.event_obj.created_by:
-            users_mention = [{"username": self.event_obj.created_by.user.email}]
+            users_mention = [{"username": self.event_obj.created_by.email}]
         else:
             users_mention = list(
                 self.event_obj.assigned_to.all().values("user__email")

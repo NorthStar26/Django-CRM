@@ -303,7 +303,7 @@ class OpportunityDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if not (
-                (self.request.profile == opportunity_object.created_by)
+                (self.request.profile.user == opportunity_object.created_by)
                 or (self.request.profile in opportunity_object.assigned_to.all())
             ):
                 return Response(
@@ -457,7 +457,7 @@ class OpportunityDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if not (
-                (self.request.profile == self.opportunity.created_by)
+                (self.request.profile.user == self.opportunity.created_by)
                 or (self.request.profile in self.opportunity.assigned_to.all())
             ):
                 return Response(
@@ -471,7 +471,7 @@ class OpportunityDetailView(APIView):
         comment_permission = False
 
         if (
-            self.request.profile == self.opportunity.created_by
+            self.request.profile.user == self.opportunity.created_by
             or self.request.user.is_superuser
             or self.request.profile.role in ["ADMIN", "MANAGER"]
         ):
@@ -486,9 +486,9 @@ class OpportunityDetailView(APIView):
                     is_active=True, org=self.request.profile.org
                 ).values("user__email")
             )
-        elif self.request.profile != self.opportunity.created_by:
+        elif self.request.profile.user != self.opportunity.created_by:
             if self.opportunity.created_by:
-                users_mention = [{"username": self.opportunity.created_by.user.email}]
+                users_mention = [{"username": self.opportunity.created_by.email}]
             else:
                 users_mention = []
         else:
@@ -540,7 +540,7 @@ class OpportunityDetailView(APIView):
             and not self.request.user.is_superuser
         ):
             if not (
-                (self.request.profile == self.opportunity_obj.created_by)
+                (self.request.profile.user == self.opportunity_obj.created_by)
                 or (self.request.profile in self.opportunity_obj.assigned_to.all())
             ):
                 return Response(
@@ -1214,7 +1214,7 @@ class OpportunityCommentCreateView(APIView):
             and not request.user.is_superuser
         ):
             if not (
-                (request.profile == opportunity.created_by)
+                (request.profile.user == opportunity.created_by)
                 or (request.profile in opportunity.assigned_to.all())
             ):
                 return Response(
