@@ -386,7 +386,9 @@ class AccountDetailView(APIView):
         context["error"] = False
         context["account_obj"] = AccountSerializer(self.account).data
         # Add company logo URL for quick access
-        context["company_logo_url"] = self.account.company.logo_url if self.account.company else None
+        context["company_logo_url"] = (
+            self.account.company.logo_url if self.account.company else None
+        )
 
         comment_permission = False
         if (
@@ -510,7 +512,9 @@ class AccountDetailView(APIView):
             "created_from_opportunity": bool(
                 self.account.company
             ),  # Indicates if account was auto-created
-            "company_logo_url": self.account.company.logo_url if self.account.company else None,
+            "company_logo_url": self.account.company.logo_url
+            if self.account.company
+            else None,
         }
 
         context.update(
