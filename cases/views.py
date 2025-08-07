@@ -13,7 +13,6 @@ from rest_framework import (
     status,
 )
 from rest_framework.exceptions import APIException
-from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -50,7 +49,6 @@ from .swagger_params1 import cases_list_get_params
 
 
 # from common.external_auth import CustomDualAuthentication
-
 
 
 # class CaseListView(APIView, LimitOffsetPagination):
@@ -176,56 +174,78 @@ from .swagger_params1 import cases_list_get_params
 #         )
 
 
-
-
 class CaseListView(generics.ListAPIView):
     serializer_class = CaseListSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'priority', 'case_type']
+    filterset_fields = ["status", "priority", "case_type"]
 
     @extend_schema(
-        parameters=cases_list_get_params,
-        responses=CaseListSerializer(many=True)
+        parameters=cases_list_get_params, responses=CaseListSerializer(many=True)
     )
-
     def get(self, request, *args, **kwargs):
-        export = request.query_params.get('export', '').lower() == 'true'
+        export = request.query_params.get("export", "").lower() == "true"
         if export:
             print("Export flag detected. Generating CSV...")
-            queryset = self.filter_queryset(self.get_queryset())  # Confirm this line executes without error
+            queryset = self.filter_queryset(
+                self.get_queryset()
+            )  # Confirm this line executes without error
             print("Queryset count:", queryset.count())
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = 'attachment; filename="cases_export.csv"'
-            
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="cases_export.csv"'
+
             # Force the response to be treated as CSV
-            response['Content-Type'] = 'text/csv'
-            
+            response["Content-Type"] = "text/csv"
+
             writer = csv.writer(response)
-            writer.writerow(['Case Name', 'Industry', 'Contact', 'Result', 'Close Date', 'Assigned To'])
-            
+            writer.writerow(
+                [
+                    "Case Name",
+                    "Industry",
+                    "Contact",
+                    "Result",
+                    "Close Date",
+                    "Assigned To",
+                ]
+            )
+
             queryset = self.filter_queryset(self.get_queryset())
             for case in queryset:
-                writer.writerow([
-                    case.name,
-                    case.opportunity.lead.company.industry if case.opportunity and case.opportunity.lead and case.opportunity.lead.company else '',
-                    f"{case.opportunity.lead.contact.first_name} {case.opportunity.lead.contact.last_name}" if case.opportunity and case.opportunity.lead and case.opportunity.lead.contact else '',
-                    str(case.expected_revenue) if case.expected_revenue else '',
-                    case.closed_on.strftime('%Y-%m-%d') if case.closed_on else '',
-                    ', '.join([f"{user.first_name} {user.last_name}" for user in case.assigned_to.all()])
-                ])
-            
+                writer.writerow(
+                    [
+                        case.name,
+                        case.opportunity.lead.company.industry
+                        if case.opportunity
+                        and case.opportunity.lead
+                        and case.opportunity.lead.company
+                        else "",
+                        f"{case.opportunity.lead.contact.first_name} {case.opportunity.lead.contact.last_name}"
+                        if case.opportunity
+                        and case.opportunity.lead
+                        and case.opportunity.lead.contact
+                        else "",
+                        str(case.expected_revenue) if case.expected_revenue else "",
+                        case.closed_on.strftime("%Y-%m-%d") if case.closed_on else "",
+                        ", ".join(
+                            [
+                                f"{user.first_name} {user.last_name}"
+                                for user in case.assigned_to.all()
+                            ]
+                        ),
+                    ]
+                )
+
             return response
         return super().get(request, *args, **kwargs)
-            
+
     def get_profile(self):
         """Safely get user profile with proper error handling"""
         try:
             return get_object_or_404(Profile, user=self.request.user)
         except Exception as e:
             raise APIException(
-                detail='User profile not found or incomplete',
-                code=status.HTTP_403_FORBIDDEN
+                detail="User profile not found or incomplete",
+                code=status.HTTP_403_FORBIDDEN,
             )
 
     def validate_org_access(self, org_header):
@@ -234,110 +254,108 @@ class CaseListView(generics.ListAPIView):
             org_uuid = uuid.UUID(org_header)
         except ValueError:
             raise APIException(
-                detail='Invalid organization UUID format',
-                code=status.HTTP_400_BAD_REQUEST
+                detail="Invalid organization UUID format",
+                code=status.HTTP_400_BAD_REQUEST,
             )
 
         profile = self.get_profile()
         if str(profile.org_id) != org_header:
             raise APIException(
-                detail='You do not have access to this organization',
-                code=status.HTTP_403_FORBIDDEN
+                detail="You do not have access to this organization",
+                code=status.HTTP_403_FORBIDDEN,
             )
         return org_uuid, profile
-    
+
     def get_queryset(self):
         # Get org header
-        org_header = self.request.META.get('HTTP_ORG')
+        org_header = self.request.META.get("HTTP_ORG")
         if not org_header:
             raise APIException(
-                detail='org header is required',
-                code=status.HTTP_400_BAD_REQUEST
+                detail="org header is required", code=status.HTTP_400_BAD_REQUEST
             )
 
         org_uuid, profile = self.validate_org_access(org_header)
 
         # Base queryset
         queryset = Case.objects.filter(org_id=org_uuid)
-        
+
         # Initialize filter variables
-        name = self.request.query_params.get('name')
-        industry = self.request.query_params.get('industry')
-        contact_id = self.request.query_params.get('contact_id')
-        status = self.request.query_params.get('status')
-        priority = self.request.query_params.get('priority')
-        case_type = self.request.query_params.get('case_type')
-        search = self.request.query_params.get('search')
-        
+        name = self.request.query_params.get("name")
+        industry = self.request.query_params.get("industry")
+        contact_id = self.request.query_params.get("contact_id")
+        case_status = self.request.query_params.get("status")
+        priority = self.request.query_params.get("priority")
+        case_type = self.request.query_params.get("case_type")
+        search = self.request.query_params.get("search")
+
         # Apply name filter if specified (independent of search)
         if name:
             queryset = queryset.filter(name__icontains=name)
-            
+
         # Apply contact filter if specified (independent of search)
         if contact_id:
             queryset = queryset.filter(
-                Q(contacts__id=contact_id) |
-                Q(opportunity__lead__contact__id=contact_id)
+                Q(contacts__id=contact_id)
+                | Q(opportunity__lead__contact__id=contact_id)
             ).distinct()
 
-        
         # Apply industry filter if specified (independent of search)
         if industry:
             queryset = queryset.filter(
                 Q(opportunity__lead__company__industry__icontains=industry)
             ).distinct()
-        
+
         # Apply search if parameter exists (combines with other filters)
         if search:
             queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(opportunity__lead__company__industry__icontains=search) |
+                Q(name__icontains=search)
+                | Q(opportunity__lead__company__industry__icontains=search)
+                |
                 # Add these contact search fields:
-                Q(contacts__first_name__icontains=search) |
-                Q(contacts__last_name__icontains=search) |
-                Q(opportunity__lead__contact__first_name__icontains=search) |
-                Q(opportunity__lead__contact__last_name__icontains=search)
+                Q(contacts__first_name__icontains=search)
+                | Q(contacts__last_name__icontains=search)
+                | Q(opportunity__lead__contact__first_name__icontains=search)
+                | Q(opportunity__lead__contact__last_name__icontains=search)
             ).distinct()
-        
+
         # Apply status, priority, and case_type filters (always applied)
-        if status:
-            queryset = queryset.filter(status=status.lower() == 'true')
+        if case_status:
+            queryset = queryset.filter(status=case_status.lower() == "true")
         if priority:
             queryset = queryset.filter(priority=priority)
         if case_type:
             queryset = queryset.filter(case_type=case_type)
 
-        # Permission filtering
-        if not self.request.user.is_superuser:
+        # Permission filtering - same logic as leads and opportunities
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             queryset = queryset.filter(
-                Q(created_by=self.request.user) | 
-                Q(assigned_to__in=[profile])
+                Q(created_by=self.request.user) | Q(assigned_to=self.request.profile)
             ).distinct()
-            
-        return queryset.select_related(
-            'opportunity',
-            'opportunity__lead',
-            'opportunity__lead__company',
-            'opportunity__lead__contact',
-            'account'
-        ).prefetch_related(
-            'contacts',
-            'assigned_to',
-            'assigned_to__user'
-        ).order_by('-created_at')
+
+        return (
+            queryset.select_related(
+                "opportunity",
+                "opportunity__lead",
+                "opportunity__lead__company",
+                "opportunity__lead__contact",
+                "account",
+            )
+            .prefetch_related("contacts", "assigned_to", "assigned_to__user")
+            .order_by("-created_at")
+        )
 
     def handle_exception(self, exc):
         """Custom exception handling for consistent error responses"""
         if isinstance(exc, APIException):
-            return Response(
-                {'error': str(exc.detail)},
-                status=exc.status_code
-            )
+            return Response({"error": str(exc.detail)}, status=exc.status_code)
         return super().handle_exception(exc)
 
 
 class CaseDetailView(APIView):
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
     model = Case
 
@@ -345,7 +363,9 @@ class CaseDetailView(APIView):
         return self.model.objects.filter(id=pk).first()
 
     @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params,request=CaseCreateSwaggerSerializer
+        tags=["Cases"],
+        parameters=swagger_params1.organization_params,
+        request=CaseCreateSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         params = request.data
@@ -355,9 +375,12 @@ class CaseDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == cases_object.created_by)
+                (self.request.user == cases_object.created_by)
                 or (self.request.profile in cases_object.assigned_to.all())
             ):
                 return Response(
@@ -384,7 +407,9 @@ class CaseDetailView(APIView):
             cases_object.contacts.clear()
             if params.get("contacts"):
                 contacts_list = params.get("contacts")
-                contacts = Contact.objects.filter(id__in=contacts_list, org=request.profile.org)
+                contacts = Contact.objects.filter(
+                    id__in=contacts_list, org=request.profile.org
+                )
                 if contacts:
                     cases_object.contacts.add(*contacts)
 
@@ -429,9 +454,7 @@ class CaseDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Cases"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if self.object.org != request.profile.org:
@@ -439,8 +462,11 @@ class CaseDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
-            if self.request.profile != self.object.created_by:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            if self.request.user != self.object.created_by:
                 return Response(
                     {
                         "error": True,
@@ -454,9 +480,7 @@ class CaseDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Cases"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):
         self.cases = self.get_object(pk=pk)
         if self.cases.org != request.profile.org:
@@ -466,9 +490,12 @@ class CaseDetailView(APIView):
             )
         context = {}
         context["cases_obj"] = CaseSerializer(self.cases).data
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == self.cases.created_by)
+                (self.request.user == self.cases.created_by)
                 or (self.request.profile in self.cases.assigned_to.all())
             ):
                 return Response(
@@ -482,21 +509,24 @@ class CaseDetailView(APIView):
         comment_permission = False
 
         if (
-            self.request.profile == self.cases.created_by
-            or self.request.profile.is_admin
+            self.request.user == self.cases.created_by
+            or self.request.user.is_superuser
             or self.request.profile.role in ["ADMIN", "MANAGER"]
         ):
             comment_permission = True
 
-        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
+        if self.request.user.is_superuser or self.request.profile.role in [
+            "ADMIN",
+            "MANAGER",
+        ]:
             users_mention = list(
-                Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
-                    "user__email"
-                )
+                Profile.objects.filter(
+                    is_active=True, org=self.request.profile.org
+                ).values("user__email")
             )
-        elif self.request.profile != self.cases.created_by:
+        elif self.request.user != self.cases.created_by:
             if self.cases.created_by:
-                users_mention = [{"username": self.cases.created_by.user.email}]
+                users_mention = [{"user__email": self.cases.created_by.email}]
             else:
                 users_mention = []
         else:
@@ -522,7 +552,9 @@ class CaseDetailView(APIView):
         return Response(context)
 
     @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params,request=CaseDetailEditSwaggerSerializer
+        tags=["Cases"],
+        parameters=swagger_params1.organization_params,
+        request=CaseDetailEditSwaggerSerializer,
     )
     def post(self, request, pk, **kwargs):
         params = request.data
@@ -534,9 +566,12 @@ class CaseDetailView(APIView):
             )
         context = {}
         comment_serializer = CommentSerializer(data=params)
-        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.profile.is_admin
+        ):
             if not (
-                (self.request.profile == self.cases_obj.created_by)
+                (self.request.user == self.cases_obj.created_by)
                 or (self.request.profile in self.cases_obj.assigned_to.all())
             ):
                 return Response(
@@ -576,14 +611,16 @@ class CaseDetailView(APIView):
 
 class CaseCommentView(APIView):
     model = Comment
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
         return self.model.objects.get(pk=pk)
 
     @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params,request=CaseCommentEditSwaggerSerializer
+        tags=["Cases"],
+        parameters=swagger_params1.organization_params,
+        request=CaseCommentEditSwaggerSerializer,
     )
     def put(self, request, pk, format=None):
         params = request.data
@@ -613,9 +650,7 @@ class CaseCommentView(APIView):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Cases"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
@@ -639,18 +674,16 @@ class CaseCommentView(APIView):
 
 class CaseAttachmentView(APIView):
     model = Attachments
-    #authentication_classes = (CustomDualAuthentication,)
+    # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
 
-    @extend_schema(
-        tags=["Cases"], parameters=swagger_params1.organization_params
-    )
+    @extend_schema(tags=["Cases"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
             request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
-            or request.profile == self.object.created_by
+            or request.user == self.object.created_by
         ):
             self.object.delete()
             return Response(
