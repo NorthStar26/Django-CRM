@@ -672,6 +672,77 @@ class CaseCommentView(APIView):
         )
 
 
+class CaseCommentCreateView(APIView):
+    """
+    Create a new comment for a case
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Cases"],
+        parameters=swagger_params1.organization_params,
+        request=CaseCommentEditSwaggerSerializer,
+        responses={
+            200: {"description": "Comment created successfully"},
+            400: {"description": "Invalid data"},
+            403: {"description": "Permission denied"},
+            404: {"description": "Case not found"},
+        },
+    )
+    def post(self, request, pk, format=None):
+        """
+        Create a new comment for the specified case
+        """
+        try:
+            case = Case.objects.get(pk=pk, org=request.profile.org)
+        except Case.DoesNotExist:
+            return Response(
+                {"error": True, "errors": "Case not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check permissions
+        if (
+            request.profile.role not in ["ADMIN", "MANAGER"]
+            and not request.profile.is_admin
+        ):
+            if not (
+                (request.user == case.created_by)
+                or (request.profile in case.assigned_to.all())
+            ):
+                return Response(
+                    {
+                        "error": True,
+                        "errors": "You don't have permission to comment on this case",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        comment_text = request.data.get("comment", "").strip()
+        if not comment_text:
+            return Response(
+                {"error": True, "errors": {"comment": "Comment cannot be empty"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create the comment
+        comment = Comment.objects.create(
+            case=case,
+            comment=comment_text,
+            commented_by=request.profile,
+        )
+
+        return Response(
+            {
+                "error": False,
+                "message": "Comment created successfully",
+                "comment": CommentSerializer(comment).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class CaseAttachmentView(APIView):
     model = Attachments
     # authentication_classes = (CustomDualAuthentication,)
