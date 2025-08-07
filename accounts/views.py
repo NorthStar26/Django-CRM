@@ -78,8 +78,8 @@ class AccountsListView(APIView, LimitOffsetPagination):
                 queryset = queryset.filter(name__icontains=params.get("name"))
             if params.get("city"):
                 queryset = queryset.filter(billing_city__contains=params.get("city"))
-            if params.get("industry"):
-                queryset = queryset.filter(industry__icontains=params.get("industry"))
+            # if params.get("industry"):
+            #     queryset = queryset.filter(industry__icontains=params.get("industry"))
             if params.get("tags"):
                 queryset = queryset.filter(tags__in=params.get("tags")).distinct()
 
@@ -95,6 +95,23 @@ class AccountsListView(APIView, LimitOffsetPagination):
         else:
             offset = 0
         accounts_open = AccountSerializer(results_accounts_open, many=True).data
+        # filter accounts based on industry
+        if params.get("industry"):
+            accounts_open = [
+                account
+                for account in accounts_open
+                if account["contacts"][0]["company"]["industry"]
+                == params.get("industry")
+            ]
+
+        # filter by contact id
+        if params.get("contact_id"):
+            accounts_open = [
+                account
+                for account in accounts_open
+                if params.get("contact_id") == account["contacts"][0]["id"]
+            ]
+
         context["per_page"] = 10
         page_number = (int(self.offset / 10) + 1,)
         context["page_number"] = page_number
@@ -118,7 +135,7 @@ class AccountsListView(APIView, LimitOffsetPagination):
         accounts_close = AccountSerializer(results_accounts_close, many=True).data
 
         contacts = Contact.objects.filter(org=self.request.profile.org).values(
-            "id", "first_name"
+            "id", "first_name", "last_name"
         )
         context["contacts"] = contacts
         context["closed_accounts"] = {
@@ -166,9 +183,9 @@ class AccountsListView(APIView, LimitOffsetPagination):
         if serializer.is_valid():
             account_object = serializer.save(org=request.profile.org)
             if data.get("contacts"):
-                contacts_list = json.loads(data.get("contacts"))
+                # contacts_list = json.loads(data.get("contacts"))
                 contacts = Contact.objects.filter(
-                    id__in=contacts_list, org=request.profile.org
+                    id=data.get("contacts"), org=request.profile.org
                 )
                 if contacts:
                     account_object.contacts.add(*contacts)
@@ -186,13 +203,16 @@ class AccountsListView(APIView, LimitOffsetPagination):
                 teams = Teams.objects.filter(id__in=teams_list, org=request.profile.org)
                 if teams:
                     account_object.teams.add(*teams)
-                if data.get("assigned_to"):
-                    assigned_to_list = json.loads(data.get("assigned_to"))
-                    profiles = Profile.objects.filter(
-                        id__in=assigned_to_list, org=request.profile.org, is_active=True
-                    )
-                    if profiles:
-                        account_object.assigned_to.add(*profiles)
+            if data.get("assigned_to"):
+                # print("Assigned to data:", data.get("assigned_to"))
+                # assigned_to_list = json.loads(data.get("assigned_to"))
+                profiles = Profile.objects.filter(
+                    id__in=data.get("assigned_to"),
+                    org=request.profile.org,
+                    is_active=True,
+                )
+                if profiles:
+                    account_object.assigned_to.add(*profiles)
 
             if self.request.FILES.get("account_attachment"):
                 attachment = Attachments()
@@ -386,7 +406,9 @@ class AccountDetailView(APIView):
         context["error"] = False
         context["account_obj"] = AccountSerializer(self.account).data
         # Add company logo URL for quick access
-        context["company_logo_url"] = self.account.company.logo_url if self.account.company else None
+        context["company_logo_url"] = (
+            self.account.company.logo_url if self.account.company else None
+        )
 
         comment_permission = False
         if (
@@ -462,9 +484,11 @@ class AccountDetailView(APIView):
                         "first_name": opportunity.lead.contact.first_name,
                         "last_name": opportunity.lead.contact.last_name,
                         "email": opportunity.lead.contact.primary_email,
-                        "phone": str(opportunity.lead.contact.mobile_number)
-                        if opportunity.lead.contact.mobile_number
-                        else None,
+                        "phone": (
+                            str(opportunity.lead.contact.mobile_number)
+                            if opportunity.lead.contact.mobile_number
+                            else None
+                        ),
                         "title": opportunity.lead.contact.title,
                         "description": opportunity.lead.contact.description,
                     }
@@ -502,15 +526,17 @@ class AccountDetailView(APIView):
             "total_opportunities": all_opportunities.count(),
             "closed_won_opportunities": total_won_count,
             "total_won_value": float(total_won_value),
-            "average_deal_size": float(total_won_value / total_won_count)
-            if total_won_count > 0
-            else 0,
+            "average_deal_size": (
+                float(total_won_value / total_won_count) if total_won_count > 0 else 0
+            ),
             "account_status": self.account.status,
             "is_active": self.account.is_active,
             "created_from_opportunity": bool(
                 self.account.company
             ),  # Indicates if account was auto-created
-            "company_logo_url": self.account.company.logo_url if self.account.company else None,
+            "company_logo_url": (
+                self.account.company.logo_url if self.account.company else None
+            ),
         }
 
         context.update(
