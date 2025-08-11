@@ -9,7 +9,7 @@ from common.models import User
 from contacts.models import Contact
 from tasks.models import Task
 
-app = Celery("redis://")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 
 @app.task

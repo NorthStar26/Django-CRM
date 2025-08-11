@@ -2,6 +2,22 @@ import pytz
 from django.utils.translation import gettext_lazy as _
 
 
+from django.http import HttpResponse
+from rest_framework import status
+import json
+
+
+def ratelimit_error_handler(request, exception=None):
+    """Return 429 instead of 403"""
+    print("RATELIMIT_ERROR_HANDLER FUNCTION CALLED!")
+    print(f"Параметры: request={request}, exception={exception}")
+    return HttpResponse(
+        json.dumps({"detail": "Too many login attempts. Please try again later."}),
+        content_type="application/json",
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+    )
+
+
 def jwt_payload_handler(user):
     """Custom payload handler
     Token encrypts the dictionary returned by this function, and can be
@@ -25,6 +41,24 @@ def jwt_payload_handler(user):
     }
 
 
+PIPELINE_CONFIG = {
+    "QUALIFICATION": {
+        "editable_fields": [],  # Этап уже пройден
+        "next_stage": "IDENTIFY_DECISION_MAKERS",
+    },
+    "IDENTIFY_DECISION_MAKERS": {
+        "editable_fields": ["meeting_date"],
+        "next_stage": "PROPOSAL",
+    },
+    "PROPOSAL": {"editable_fields": ["attachment_links"], "next_stage": "NEGOTIATION"},
+    "NEGOTIATION": {"editable_fields": ["feedback"], "next_stage": "CLOSE"},
+    "CLOSE": {
+        "editable_fields": ["close_option"],  #  Won/Lost
+        "next_stage": None,  # Dipends on close_option
+    },
+    "CLOSED LOST": {"editable_fields": ["reason"], "next_stage": None},
+    "CLOSED WON": {"editable_fields": ["contract_attachment"], "next_stage": None},
+}
 INDCHOICES = (
     ("ADVERTISING", "ADVERTISING"),
     ("AGRICULTURE", "AGRICULTURE"),
@@ -67,15 +101,15 @@ TYPECHOICES = (
 
 ROLES = (
     ("ADMIN", "ADMIN"),
+    ("MANAGER", "MANAGER"),
     ("USER", "USER"),
 )
 
 LEAD_STATUS = (
-    ("assigned", "Assigned"),
-    ("in process", "In Process"),
-    ("converted", "Converted"),
+    ("new", "New"),
+    ("qualified", "Qualified"),
+    ("disqualified", "Disqualified"),
     ("recycled", "Recycled"),
-    ("closed", "Closed"),
 )
 
 
@@ -107,17 +141,17 @@ PRIORITY_CHOICE = (
 
 CASE_TYPE = (("Question", "Question"), ("Incident", "Incident"), ("Problem", "Problem"))
 
+
 STAGES = (
     ("QUALIFICATION", "QUALIFICATION"),
-    ("NEEDS ANALYSIS", "NEEDS ANALYSIS"),
-    ("VALUE PROPOSITION", "VALUE PROPOSITION"),
-    ("ID.DECISION MAKERS", "ID.DECISION MAKERS"),
-    ("PERCEPTION ANALYSIS", "PERCEPTION ANALYSIS"),
-    ("PROPOSAL/PRICE QUOTE", "PROPOSAL/PRICE QUOTE"),
-    ("NEGOTIATION/REVIEW", "NEGOTIATION/REVIEW"),
+    ("IDENTIFY_DECISION_MAKERS", "Identify Decision Makers"),
+    ("PROPOSAL", "Proposal"),
+    ("NEGOTIATION", "Negotiation"),
+    ("CLOSE", "Close"),
     ("CLOSED WON", "CLOSED WON"),
     ("CLOSED LOST", "CLOSED LOST"),
 )
+
 
 SOURCES = (
     ("NONE", "NONE"),

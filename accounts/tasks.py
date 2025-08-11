@@ -11,17 +11,17 @@ from accounts.models import Account, AccountEmail, AccountEmailLog
 from common.models import Profile
 from common.utils import convert_to_custom_timezone
 
-app = Celery("redis://")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 
 @app.task
 def send_email(email_obj_id):
-    email_obj = Email.objects.filter(id=email_obj_id).first()
+    email_obj = AccountEmail.objects.filter(id=email_obj_id).first()
     if email_obj:
         from_email = email_obj.from_email
         contacts = email_obj.recipients.all()
         for contact_obj in contacts:
-            if not EmailLog.objects.filter(
+            if not AccountEmailLog.objects.filter(
                 email=email_obj, contact=contact_obj, is_sent=True
             ).exists():
                 html = email_obj.message_body
@@ -29,11 +29,7 @@ def send_email(email_obj_id):
                     "email": contact_obj.primary_email
                     if contact_obj.primary_email
                     else "",
-                    "name": contact_obj.first_name
-                    if contact_obj.first_name
-                    else "" + " " + contact_obj.last_name
-                    if contact_obj.last_name
-                    else "",
+                    "name": f"{contact_obj.first_name or ''} {contact_obj.last_name or ''}",
                 }
                 try:
                     html_content = Template(html).render(Context(context_data))
@@ -42,16 +38,14 @@ def send_email(email_obj_id):
                         subject,
                         html_content,
                         from_email=from_email,
-                        to=[
-                            contact_obj.primary_email,
-                        ],
+                        to=[contact_obj.primary_email],
                     )
                     msg.content_subtype = "html"
                     res = msg.send()
                     if res:
                         email_obj.rendered_message_body = html_content
                         email_obj.save()
-                        EmailLog.objects.create(
+                        AccountEmailLog.objects.create(
                             email=email_obj, contact=contact_obj, is_sent=True
                         )
                 except Exception as e:
@@ -86,7 +80,7 @@ def send_email_to_assigned_user(recipients, from_email):
 
 @app.task
 def send_scheduled_emails():
-    email_objs = Email.objects.filter(scheduled_later=True)
+    email_objs = AccountEmail.objects.filter(scheduled_later=True)
     # TODO: modify this later , since models are updated
     for each in email_objs:
         scheduled_date_time = each.scheduled_date_time

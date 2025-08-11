@@ -10,7 +10,7 @@ from django.template.loader import render_to_string
 from common.models import Org, Profile
 from leads.models import Lead
 
-app = Celery("redis://")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
 
 
 def get_rendered_html(template_name, context={}):
@@ -86,6 +86,7 @@ def send_email_to_assigned_user(recipients, lead_id, source=""):
             recipients_list.append(profile.user.email)
             context = {}
             context["url"] = settings.DOMAIN_NAME
+            context["frontend_url"] = settings.FRONTEND_DOMAIN_NAME
             context["user"] = profile.user
             context["lead"] = lead
             context["created_by"] = created_by

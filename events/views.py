@@ -47,7 +47,7 @@ class EventListView(APIView, LimitOffsetPagination):
         params = self.request.query_params
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
         contacts = Contact.objects.filter(org=self.request.profile.org)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
                 | Q(created_by=self.request.profile.user)
@@ -221,7 +221,7 @@ class EventDetailView(APIView):
         ]
         if self.request.profile == self.event_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile.id not in user_assgn_list:
                 return Response(
                     {
@@ -234,27 +234,27 @@ class EventDetailView(APIView):
         comments = Comment.objects.filter(event=self.event_obj).order_by("-id")
         attachments = Attachments.objects.filter(event=self.event_obj).order_by("-id")
         assigned_data = self.event_obj.assigned_to.values("id", "user__email")
-        if self.request.profile.is_admin or self.request.profile.role == "ADMIN":
+        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
             users_mention = list(
                 Profile.objects.filter(
                     is_active=True,
                 ).values("user__email")
             )
         elif self.request.profile != self.event_obj.created_by:
-            users_mention = [{"username": self.event_obj.created_by.user.email}]
+            users_mention = [{"username": self.event_obj.created_by.email}]
         else:
             users_mention = list(
                 self.event_obj.assigned_to.all().values("user__email")
             )
         profile_list = Profile.objects.filter(is_active=True, org=self.request.profile.org)
-        if self.request.profile.role == "ADMIN" or self.request.profile.is_admin:
+        if self.request.profile.role in ["ADMIN", "MANAGER"] or self.request.profile.is_admin:
             profiles = profile_list.order_by("user__email")
         else:
             profiles = profile_list.filter(role="ADMIN").order_by("user__email")
 
         if self.request.profile == self.event_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile.id not in user_assgn_list:
                 return Response(
                     {
@@ -321,7 +321,7 @@ class EventDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.event_obj.created_by)
                 or (self.request.profile in self.event_obj.assigned_to.all())
@@ -431,7 +431,7 @@ class EventDetailView(APIView):
     def delete(self, request, pk, **kwargs):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ) and self.object.org == request.profile.org:
@@ -461,7 +461,7 @@ class EventCommentView(APIView):
         params = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == obj.commented_by
         ):
@@ -490,7 +490,7 @@ class EventCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.commented_by
         ):
@@ -519,7 +519,7 @@ class EventAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):

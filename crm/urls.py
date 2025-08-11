@@ -11,27 +11,38 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+
 # from drf_yasg import openapi
 # from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 from wagtail import urls as wagtail_urls
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.documents import urls as wagtaildocs_urls
+from django.shortcuts import redirect
 
 app_name = "crm"
 
 urlpatterns = [
+    url(
+        r"^$",
+        lambda request: redirect("/swagger-ui/", permanent=False),
+        name="root-redirect",
+    ),
     url(
         r"^healthz/$",
         TemplateView.as_view(template_name="healthz.html"),
         name="healthz",
     ),
     path("api/", include("common.app_urls", namespace="common_urls")),
+    path("api/companies/", include("companies.urls")),
+    path("api/contacts/", include("contacts.urls")),
+    path("api/cases/", include("cases.urls", namespace="api_cases")),
+
+    # path("api/leads/", include("leads.urls")),
     path(
         "logout/", views.LogoutView.as_view(), {"next_page": "/login/"}, name="logout"
     ),
     path("admin/", include(wagtailadmin_urls)),
-    
     path("django/admin/", admin.site.urls),
     path("documents/", include(wagtaildocs_urls)),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -46,7 +57,6 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
-    path("", include(wagtail_urls)),
 ]
 
 

@@ -1,6 +1,5 @@
-import datetime
-
 from celery import Celery
+import datetime
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMessage
@@ -8,24 +7,31 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+import logging
 
-from common.models import Comment, Profile, User
+from common.models import Comment, User
 from common.token_generator import account_activation_token
 
-app = Celery("redis://")
+app = Celery("crm", broker=settings.CELERY_BROKER_URL)
+
+logger = logging.getLogger(__name__)
 
 
-@app.task
-def send_email_to_new_user(user_id):
-
+@app.task(bind=True, max_retries=3)
+def send_email_to_new_user(self, user_id):
     """Send Mail To Users When their account is created"""
-    user_obj = User.objects.filter(id=user_id).first()
-
-    if user_obj:
+    logger.info(f"[Celery] send_email_to_new_user triggered for user_id={user_id}")
+    try:
         context = {}
-        user_email = user_obj.email
-        context["url"] = settings.DOMAIN_NAME
-        context["uid"] = (urlsafe_base64_encode(force_bytes(user_obj.pk)),)
+        user_obj = User.objects.filter(id=user_id).first()
+        if not user_obj:
+            logger.error(f"[Celery] User with id {user_id} not found")
+            raise ValueError(f"User with id {user_id} not found")
+
+        context["frontend_url"] = settings.FRONTEND_DOMAIN_NAME
+        context["url"] = settings.DOMAIN_NAME  # keep for backend/internal links
+
+        context["uid"] = urlsafe_base64_encode(force_bytes(user_obj.pk))
         context["token"] = account_activation_token.make_token(user_obj)
         time_delta_two_hours = datetime.datetime.strftime(
             timezone.now() + datetime.timedelta(hours=2), "%Y-%m-%d-%H-%M-%S"
@@ -36,15 +42,11 @@ def send_email_to_new_user(user_id):
         user_obj.save()
 
         context["complete_url"] = context[
-            "url"
-        ] + "/auth/activate-user/{}/{}/{}/".format(
-            context["uid"][0],
-            context["token"],
+            "frontend_url"
+        ] + "/activate-account/{}/".format(
             activation_key,
         )
-        recipients = [
-            user_email,
-        ]
+        recipients = [user_obj.email]
         subject = "Welcome to Bottle CRM"
         html_content = render_to_string("user_status_in.html", context=context)
 
@@ -56,6 +58,13 @@ def send_email_to_new_user(user_id):
         )
         msg.content_subtype = "html"
         msg.send()
+        logger.info(f"[Celery] Welcome email sent to {user_obj.email}")
+    except Exception as exc:
+        logger.error(
+            f"[Celery] Error sending welcome email to user_id={user_id}: {exc}"
+        )
+        # Retry task in case of error, with exponential backoff
+        self.retry(exc=exc, countdown=2**self.request.retries)
 
 
 @app.task
@@ -138,8 +147,8 @@ def send_email_user_status(
         context["message"] = "deactivated"
         context["email"] = user.email
         context["url"] = settings.DOMAIN_NAME
-        if user.has_marketing_access:
-            context["url"] = context["url"] + "/marketing"
+        # if user.has_marketing_access:
+        #     context["url"] = context["url"] + "/marketing"
         if user.is_active:
             context["message"] = "activated"
         context["status_changed_user"] = status_changed_user
@@ -166,11 +175,8 @@ def send_email_user_status(
             msg.send()
 
 
-@app.task
-def send_email_user_delete(
-    user_email,
-    deleted_by="",
-):
+@app.task(bind=True, max_retries=3)
+def send_email_user_delete(self, user_email, deleted_by=""):
     """Send Mail To Users When their account is deleted"""
     if user_email:
         context = {}
@@ -182,14 +188,22 @@ def send_email_user_delete(
         subject = "CRM : Your account is Deleted. "
         html_content = render_to_string("user_delete_email.html", context=context)
         if recipients:
-            msg = EmailMessage(
-                subject,
-                html_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=recipients,
-            )
-            msg.content_subtype = "html"
-            msg.send()
+            try:
+                msg = EmailMessage(
+                    subject,
+                    html_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=recipients,
+                )
+                msg.content_subtype = "html"
+                msg.send()
+                logger.info(f"[Celery] Deletion email sent to {user_email}")
+            except Exception as e:
+                logger.error(
+                    f"[Celery] Failed to send deletion email to {user_email}: {e}"
+                )
+                # Retry task in case of error, with exponential backoff
+                self.retry(exc=e, countdown=2**self.request.retries)
 
 
 @app.task
@@ -248,15 +262,17 @@ def send_email_to_reset_password(user_email):
     user = User.objects.filter(email=user_email).first()
     context = {}
     context["user_email"] = user_email
+    context["frontend_url"] = settings.FRONTEND_DOMAIN_NAME
     context["url"] = settings.DOMAIN_NAME
     context["uid"] = (urlsafe_base64_encode(force_bytes(user.pk)),)
     context["token"] = default_token_generator.make_token(user)
     context["token"] = context["token"]
-    context["complete_url"] = context[
-        "url"
-    ] + "/auth/reset-password/{uidb64}/{token}/".format(
+    context["password_reset_url"] = context[
+            "frontend_url"
+    ] + "/auth/reset-password/{uidb64}/{token}".format(
         uidb64=context["uid"][0], token=context["token"]
     )
+    print(f"DEBUG - UID: {context['uid'][0]}, Token: {context['token']}")
     subject = "Set a New Password"
     recipients = []
     recipients.append(user_email)
@@ -269,3 +285,7 @@ def send_email_to_reset_password(user_email):
         )
         msg.content_subtype = "html"
         msg.send()
+
+
+
+

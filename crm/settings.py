@@ -3,6 +3,8 @@ from datetime import timedelta
 
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
+import sys
+print(f"PYTHON PATH: {sys.executable}")
 
 # JWT_AUTH = {
 #     'JWT_PAYLOAD_GET_USERNAME_HANDLER':
@@ -61,9 +63,12 @@ INSTALLED_APPS = [
     "phonenumber_field",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist", # to blacklist tokens
+    "django_ratelimit",
     "corsheaders",
     "django_ses",
     "drf_spectacular",
+    #"drf_yasg",
     "common",
     "accounts",
     "cases",
@@ -76,6 +81,8 @@ INSTALLED_APPS = [
     "invoices",
     "events",
     "teams",
+    "companies",
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
@@ -133,6 +140,15 @@ DATABASES = {
 }
 
 
+
+
+# Добавила:
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/1"),
+    }
+}
 # Password validation
 # https://docs.djangoproject.com/en/1.10/ref/settings/#auth-password-validators
 
@@ -161,7 +177,21 @@ USE_I18N = True
 
 USE_TZ = True
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Email settings
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 1025))
+EMAIL_USE_TLS = False
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get(
+    "CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
+)
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
 
 AUTH_USER_MODEL = "common.User"
 
@@ -258,7 +288,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "common.external_auth.CustomDualAuthentication"
+        "common.external_auth.CustomDualAuthentication",
         # "rest_framework.authentication.SessionAuthentication",
         # "rest_framework.authentication.BasicAuthentication",
     ),
@@ -275,7 +305,6 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "PREPROCESSING_HOOKS": ["common.custom_openapi.preprocessing_filter_spec"],
-    
 }
 
 # JWT_SETTINGS = {
@@ -294,7 +323,10 @@ SWAGGER_SETTINGS = {
     },
 }
 
-CORS_ALLOW_HEADERS = default_headers + ("org",)
+CORS_ALLOW_HEADERS = default_headers + (
+    "org",
+    "activation-key",
+)
 CORS_ORIGIN_ALLOW_ALL = True
 CSRF_TRUSTED_ORIGINS = ["https://*.runcode.io", "http://*"]
 
@@ -308,8 +340,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
-DOMAIN_NAME = os.getenv("DOMAIN_NAME")
-
+DOMAIN_NAME = os.environ.get("DOMAIN_NAME", "http://localhost:8000")
+FRONTEND_DOMAIN_NAME = os.environ.get("FRONTEND_DOMAIN_NAME", "http://localhost:3000")
 
 SIMPLE_JWT = {
     #'ACCESS_TOKEN_LIFETIME': timedelta(minutes=1),
@@ -330,6 +362,12 @@ SIMPLE_JWT = {
 # it is needed in custome middlewere to get the user from the token
 JWT_ALGO = "HS256"
 
+# Setting the lifetime of the password reset token (1 day)
+PASSWORD_RESET_TIMEOUT =43200  # seconds
 
+# settings django_ratelimit
+RATELIMIT_VIEW = "common.utils.ratelimit_error_handler"
 DOMAIN_NAME = os.environ["DOMAIN_NAME"]
 SWAGGER_ROOT_URL = os.environ["SWAGGER_ROOT_URL"]
+
+APPEND_SLASH=False

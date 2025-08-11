@@ -1,7 +1,9 @@
 import json
+from operator import is_
 import secrets
 from multiprocessing import context
-# from re import template
+from django_ratelimit.decorators import ratelimit
+from django_ratelimit.exceptions import Ratelimited
 
 import requests
 from django.contrib.auth.base_user import BaseUserManager
@@ -13,7 +15,7 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.db.models import Q
-from django.http.response import JsonResponse
+from django.http.response import JsonResponse, Http404
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.encoding import force_str
@@ -53,6 +55,7 @@ from common.tasks import (
     send_email_to_new_user,
     send_email_to_reset_password,
     send_email_user_delete,
+    send_email_user_status,
 )
 from common.token_generator import account_activation_token
 
@@ -65,6 +68,42 @@ from opportunity.models import Opportunity
 from opportunity.serializer import OpportunitySerializer
 from teams.models import Teams
 from teams.serializer import TeamsSerializer
+
+
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_decode
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from common.models import User
+from common.serializer import SetPasswordSerializer  # added
+
+from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.views import TokenObtainPairView
+from common.utils import ratelimit_error_handler
+from django_ratelimit.decorators import ratelimit
+from django.http import HttpResponse
+from rest_framework import status
+import json
+from common.serializer import CustomTokenObtainPairSerializer
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+    @method_decorator(ratelimit(key="ip", rate="5/m", block=True))
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps(
+                    {"detail": "Too many login attempts. Please try again later."}
+                ),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
 
 class GetTeamsAndUsersView(APIView):
@@ -88,6 +127,7 @@ class UsersListView(APIView, LimitOffsetPagination):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
+        tags=["users"],
         parameters=swagger_params1.organization_params,
         request=UserCreateSwaggerSerializer,
     )
@@ -121,25 +161,24 @@ class UsersListView(APIView, LimitOffsetPagination):
                 if address_serializer.is_valid():
                     address_obj = address_serializer.save()
                     user = user_serializer.save(
-                        is_active=True,
+                        is_active=False,  # User is created inactive by default
                     )
                     user.email = user.email
                     user.save()
-                    # if params.get("password"):
-                    #     user.set_password(params.get("password"))
-                    #     user.save()
+                    # if params.get("password"):   #
+                    #     user.set_password(params.get("password"))#
+                    #     user.save()#
                     profile = Profile.objects.create(
                         user=user,
                         date_of_joining=timezone.now(),
                         role=params.get("role"),
                         address=address_obj,
                         org=request.profile.org,
+                        phone=params.get("phone"),
+                        alternate_phone=params.get("alternate_phone"),
+                        is_active=False,  # Profile is created inactive by default
                     )
-
-                    # send_email_to_new_user.delay(
-                    #     profile.id,
-                    #     request.profile.org.id,
-                    # )
+                    send_email_to_new_user.delay(user.id)
                     return Response(
                         {"error": False, "message": "User Created Successfully"},
                         status=status.HTTP_201_CREATED,
@@ -147,21 +186,48 @@ class UsersListView(APIView, LimitOffsetPagination):
 
     @extend_schema(parameters=swagger_params1.user_list_params)
     def get(self, request, format=None):
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        org_id = request.headers.get("org")
+        if not org_id:
             return Response(
-                {"error": True, "errors": "Permission Denied"},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": True, "errors": "Organization ID is required in the header."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.user.is_superuser:
+        #     return Response(
+        #         {"error": True, "errors": "Permission Denied"},
+        #         status=status.HTTP_403_FORBIDDEN,
+        #     )
         queryset = Profile.objects.filter(org=request.profile.org).order_by("-id")
+
+        # For normal users (not ADMIN/MANAGER), only show their own profile
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
+            queryset = queryset.filter(id=self.request.profile.id)
+
         params = request.query_params
         if params:
             if params.get("email"):
                 queryset = queryset.filter(user__email__icontains=params.get("email"))
             if params.get("role"):
                 queryset = queryset.filter(role=params.get("role"))
+            # if params.get("status"):
+            #     queryset = queryset.filter(is_active=params.get("status"))
             if params.get("status"):
-                queryset = queryset.filter(is_active=params.get("status"))
-
+                status_param = params.get("status")
+                if status_param == "Active":
+                    queryset = queryset.filter(is_active=True)
+                elif status_param == "In Active" or status_param == "Inactive":
+                    queryset = queryset.filter(is_active=False)
+                else:
+                    #
+                    try:
+                        is_active = status_param.lower() == "true"
+                        queryset = queryset.filter(is_active=is_active)
+                    except:
+                        pass
         context = {}
         queryset_active_users = queryset.filter(is_active=True)
         results_active_users = self.paginate_queryset(
@@ -211,14 +277,14 @@ class UserDetailView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get_object(self, pk):
-        profile = get_object_or_404(Profile, pk=pk)
+        profile = get_object_or_404(Profile, user__id=pk, org=self.request.profile.org)
         return profile
 
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def get(self, request, pk, format=None):
         profile_obj = self.get_object(pk)
         if (
-            self.request.profile.role != "ADMIN"
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
             and not self.request.profile.is_admin
             and self.request.profile.id != profile_obj.id
         ):
@@ -247,7 +313,6 @@ class UserDetailView(APIView):
         context["assigned_data"] = assigned_data
         comments = profile_obj.user_comments.all()
         context["comments"] = CommentSerializer(comments, many=True).data
-        context["countries"] = COUNTRIES
         return Response(
             {"error": False, "data": context},
             status=status.HTTP_200_OK,
@@ -260,6 +325,7 @@ class UserDetailView(APIView):
     )
     def put(self, request, pk, format=None):
         params = request.data
+        print(params)
         profile = self.get_object(pk)
         address_obj = profile.address
         if (
@@ -299,9 +365,23 @@ class UserDetailView(APIView):
             address_obj = address_serializer.save()
             user = serializer.save()
             user.email = user.email
+            # add firstname and lastname update
+            user.first_name = params.get("first_name", "")
+            user.last_name = params.get("last_name", "")
             user.save()
         if profile_serializer.is_valid():
             profile = profile_serializer.save()
+            # Link the address to the profile if it was newly created or updated
+            if profile.address != address_obj:
+                profile.address = address_obj
+                # add alternate phone and phone to profile
+            profile.phone = params.get("phone")
+            profile.alternate_phone = params.get("alternate_phone")
+            profile.save()
+            # Send status change email after profile update
+            from common.tasks import send_email_user_status
+
+            # send_email_user_status.delay(profile.user.id, request.user.email)
             return Response(
                 {"error": False, "message": "User Updated Successfully"},
                 status=status.HTTP_200_OK,
@@ -311,26 +391,48 @@ class UserDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    ### Deactivate (Delete) User Profile and Deactivate User Account
+
     @extend_schema(tags=["users"], parameters=swagger_params1.organization_params)
     def delete(self, request, pk, format=None):
+        # Check if the user has permission to delete
         if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
             return Response(
                 {"error": True, "errors": "Permission Denied"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Get the user profile
         self.object = self.get_object(pk)
+
+        # Prohibit to delete themself
         if self.object.id == request.profile.id:
             return Response(
-                {"error": True, "errors": "Permission Denied"},
+                {"error": True, "errors": "You cannot delete yourself."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Send email
         deleted_by = self.request.profile.user.email
         send_email_user_delete.delay(
             self.object.user.email,
             deleted_by=deleted_by,
         )
-        self.object.delete()
-        return Response({"status": "success"}, status=status.HTTP_200_OK)
+
+        # Update user status to inactive
+        user = self.object.user
+        user.is_active = False
+        user.save()
+
+        # Delete the profile
+        # self.object.delete()
+
+        # Deactivate the profile
+        self.object.is_active = False
+        self.object.save()
+        return Response(
+            {"status": "User deactivated successfully"}, status=status.HTTP_200_OK
+        )
 
 
 # check_header not working
@@ -346,7 +448,10 @@ class ApiHomeView(APIView):
         )
         opportunities = Opportunity.objects.filter(org=request.profile.org)
 
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             accounts = accounts.filter(
                 Q(assigned_to=self.request.profile)
                 | Q(created_by=self.request.profile.user)
@@ -448,6 +553,57 @@ class ProfileView(APIView):
         return Response(context, status=status.HTTP_200_OK)
 
 
+class CurrentUserProfileView(APIView):
+    """
+    API endpoint to retrieve current user's profile for a specified organization.
+
+    The organization is specified via the 'org' header. The authenticated user
+    must have a profile in that organization.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["profile"],
+        parameters=swagger_params1.organization_params,
+        description="Get current user's profile for the specified organization",
+        responses={
+            200: CurrentUserProfileSerializer,
+            403: {"description": "User not authorized for this organization"},
+            404: {"description": "User profile not found in this organization"},
+        },
+    )
+    def get(self, request, format=None):
+        org_id = request.headers.get("org")
+
+        if not org_id:
+            return Response(
+                {"error": True, "message": "Organization header is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Get the user's profile for the specified organization
+            profile = Profile.objects.get(
+                user=request.user, org_id=org_id, is_active=True
+            )
+        except Profile.DoesNotExist:
+            return Response(
+                {
+                    "error": True,
+                    "message": "User is not assigned to this organization or profile is inactive",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Serialize the profile data
+        serializer = CurrentUserProfileSerializer(profile)
+
+        return Response(
+            {"error": False, "profile": serializer.data}, status=status.HTTP_200_OK
+        )
+
+
 class DocumentListView(APIView, LimitOffsetPagination):
     # authentication_classes = (CustomDualAuthentication,)
     permission_classes = (IsAuthenticated,)
@@ -458,7 +614,10 @@ class DocumentListView(APIView, LimitOffsetPagination):
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by(
             "-id"
         )
-        if self.request.user.is_superuser or self.request.profile.role == "ADMIN":
+        if self.request.user.is_superuser or self.request.profile.role in [
+            "ADMIN",
+            "MANAGER",
+        ]:
             queryset = queryset
         else:
             if self.request.profile.documents():
@@ -488,7 +647,10 @@ class DocumentListView(APIView, LimitOffsetPagination):
         profile_list = Profile.objects.filter(
             is_active=True, org=self.request.profile.org
         )
-        if self.request.profile.role == "ADMIN" or self.request.profile.is_admin:
+        if (
+            self.request.profile.role in ["ADMIN", "MANAGER"]
+            or self.request.profile.is_admin
+        ):
             profiles = profile_list.order_by("user__email")
         else:
             profiles = profile_list.filter(role="ADMIN").order_by("user__email")
@@ -607,9 +769,12 @@ class DocumentDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(
@@ -620,7 +785,7 @@ class DocumentDetailView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
         profile_list = Profile.objects.filter(org=self.request.profile.org)
-        if request.profile.role == "ADMIN" or request.user.is_superuser:
+        if request.profile.role in ["ADMIN", "MANAGER"] or request.user.is_superuser:
             profiles = profile_list.order_by("user__email")
         else:
             profiles = profile_list.filter(role="ADMIN").order_by("user__email")
@@ -648,9 +813,12 @@ class DocumentDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if (
-                self.request.profile != document.created_by
+                self.request.profile.user != document.created_by
             ):  # or (self.request.profile not in document.shared_to.all()):
                 return Response(
                     {
@@ -683,9 +851,12 @@ class DocumentDetailView(APIView):
                 {"error": True, "errors": "User company doesnot match with header...."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if self.request.profile.role != "ADMIN" and not self.request.user.is_superuser:
+        if (
+            self.request.profile.role not in ["ADMIN", "MANAGER"]
+            and not self.request.user.is_superuser
+        ):
             if not (
-                (self.request.profile == self.object.created_by)
+                (self.request.profile.user == self.object.created_by)
                 or (self.request.profile in self.object.shared_to.all())
             ):
                 return Response(
@@ -748,7 +919,7 @@ class UserStatusView(APIView):
             )
         params = request.data
         profiles = Profile.objects.filter(org=request.profile.org)
-        profile = profiles.get(id=pk)
+        profile = profiles.get(user__id=pk)
 
         if params.get("status"):
             user_status = params.get("status")
@@ -914,20 +1085,325 @@ class GoogleLoginView(APIView):
             user = User()
             user.email = data["email"]
             user.profile_pic = data["picture"]
+            # add first name and last name if available
+            if "given_name" in data:
+                user.first_name = data["given_name"]
+            if "family_name" in data:
+                user.last_name = data["family_name"]
             # Generate random password
             import string
             import random
+
             def generate_random_password(length=10):
                 chars = string.ascii_letters + string.digits
-                return ''.join(random.choice(chars) for _ in range(length))
-            
+                return "".join(random.choice(chars) for _ in range(length))
+
             user.password = make_password(generate_random_password())
             user.save()
 
-        token = RefreshToken.for_user(user)  # generate token without username & password
+        token = RefreshToken.for_user(
+            user
+        )  # generate token without username & password
         response = {}
         response["username"] = user.email
         response["access_token"] = str(token.access_token)
         response["refresh_token"] = str(token)
         response["user_id"] = user.id
+        response["first_name"] = user.first_name
+        response["last_name"] = user.last_name
         return Response(response)
+
+
+class SetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        description="Set password for user with email and activation key",
+        request=SetPasswordSerializer,
+        responses={200: {"description": "Password set successfully"}},
+    )
+    def post(self, request):
+        """Setting a password for a user using email and activation code"""
+        serializer = SetPasswordSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = serializer.validated_data["email"]
+            activation_key = request.META.get("HTTP_ACTIVATION_KEY")
+            if not activation_key:
+                return Response(
+                    {"error": True, "errors": "Activation key is required in header"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            password = serializer.validated_data["password"]
+
+            try:
+                user = User.objects.get(email=email)
+
+                # Check the activation key
+                if user.activation_key != activation_key:
+                    return Response(
+                        {"success": False, "message": "Invalid activation key."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Set a password and activate the user
+                user.set_password(password)
+                user.is_active = True
+                user.activation_key = None  # Reset the activation key
+                user.save()
+
+                # Активируем профиль пользователя
+                try:
+                    profile = Profile.objects.get(user=user)
+                    profile.is_active = True  #
+                    profile.save()
+
+                    return Response(
+                        {
+                            "success": True,
+                            "message": "The password has been set successfully. You can now log in.",
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Profile.DoesNotExist:
+                    return Response(
+                        {
+                            "success": False,
+                            "message": "Profile for this user not found.",
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except User.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "User with this email not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserImageView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["users"],
+        parameters=swagger_params1.organization_params,
+        request=UserImageSerializer,  # Make sure to create this serializer
+    )
+    def put(self, request, pk):
+        profile = get_object_or_404(Profile, user__id=pk, org=request.profile.org)
+
+        # Check if the request is to remove the profile picture
+        if request.data.get("profile_pic") in [None, ""]:
+            # Clear the profile picture
+            profile.user.profile_pic = None
+            profile.user.save()
+
+            return Response(
+                {
+                    "error": False,
+                    "message": "Profile picture removed successfully",
+                    "profile_pic": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Handle regular profile picture update
+        if not request.data.get("profile_pic"):
+            return Response(
+                {"error": True, "errors": "Profile picture is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.data.get("email") != profile.user.email:
+            return Response(
+                {
+                    "error": True,
+                    "errors": "You can only update your own profile picture",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Update the profile picture
+        profile.user.profile_pic = request.data.get("profile_pic")
+        profile.user.save()
+
+        return Response(
+            {
+                "error": False,
+                "message": "Profile picture updated successfully",
+                "profile_pic": profile.user.profile_pic,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResetPasswordView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        description="Reset password for user with email and activation key",
+        # parameters=swagger_params1.reset_password_params,  # Adding Header Parameters
+        request=ResetPasswordSerializer,
+        responses={200: {"description": "Password reset successfully"}},
+    )
+    def put(self, request):
+        print(request.data)
+        """Resetting a password for a user using email and activation code"""
+        serializer = ResetPasswordSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = request.data.get("email")
+
+            new_password = request.data.get("new_password")
+
+            try:
+                user = User.objects.get(email=email)
+
+                # Set a new password and reset the activation key
+                user.set_password(new_password)
+                user.save()
+
+                # Activate the user's profile
+                try:
+                    profile = Profile.objects.get(user=user)
+                    profile.is_active = True  #
+                    profile.save()
+
+                    return Response(
+                        {
+                            "success": True,
+                            "message": "The password has been reset successfully. You can now log in.",
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Profile.DoesNotExist:
+                    return Response(
+                        {
+                            "success": False,
+                            "message": "Profile for this user not found.",
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except User.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "User with this email not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ResetPasswordRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="5/m", block=True))
+    @extend_schema(
+        description="Request password reset link",
+        request=ResetPasswordRequestSerializer,
+        responses={200: {"description": "Password reset link sent"}},
+    )
+    def post(self, request):
+        """Send password reset link to user's email"""
+        try:
+            serializer = ResetPasswordRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"success": False, "message": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            email = serializer.validated_data["email"]
+
+            # Check if user exists
+            user = User.objects.filter(email=email).first()
+            if not user:
+                # For security reasons, don't reveal that email doesn't exist
+                return Response(
+                    {
+                        "success": True,
+                        "message": "If your email exists in our system, you will receive a password reset link",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Send password reset email asynchronously
+            send_email_to_reset_password.delay(email)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Password reset link has been sent to your email",
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps({"detail": "Too many requests. Please try again later."}),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+
+class ResetPasswordConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    @method_decorator(ratelimit(key="ip", rate="3/m", block=True))
+    @extend_schema(
+        description="Confirm password reset with token",
+        request=ResetPasswordConfirmSerializer,
+        responses={200: {"description": "Password reset successful"}},
+    )
+    def post(self, request):
+        """Reset password using uid and token from email"""
+        try:
+            serializer = ResetPasswordConfirmSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"success": False, "message": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            uidb64 = serializer.validated_data["uidb64"]
+            token = serializer.validated_data["token"]
+            password = serializer.validated_data["password"]
+
+            try:
+                # Decode the user ID
+                user_id = force_str(urlsafe_base64_decode(uidb64))
+                user = User.objects.get(pk=user_id)
+
+                # Check the token
+                if not default_token_generator.check_token(user, token):
+                    return Response(
+                        {
+                            "success": False,
+                            "message": "The reset link is invalid or has expired",
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Set the new password
+                user.set_password(password)
+                user.save()
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": "Password has been reset successfully. You can now log in with your new password.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                return Response(
+                    {
+                        "success": False,
+                        "message": "The reset link is invalid or has expired",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except Ratelimited:
+            return HttpResponse(
+                json.dumps({"detail": "Too many attempts. Please try again later."}),
+                content_type="application/json",
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )

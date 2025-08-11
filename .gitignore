@@ -26,3 +26,5 @@ server.log
 .vscode
 staticfiles
 .venv
+.DS_Store
+venv

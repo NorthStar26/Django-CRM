@@ -13,7 +13,7 @@ from common.tasks import (
     send_email_user_mentions,
     send_email_user_status,
 )
-from common.tests import ObjectsCreation
+from common.models import ObjectsCreation  # Update the import path if the module exists elsewhere
 from contacts.tests import ContactObjectsCreation
 from events.tests import EventObjectTest
 from invoices.tests import InvoiceCreateTest

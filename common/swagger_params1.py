@@ -9,6 +9,16 @@ organization_params = [
     organization_params_in_header,
 ]
 
+# parameter for activation_key in header
+activation_key_in_header = OpenApiParameter(
+    "activation-key", OpenApiTypes.STR, OpenApiParameter.HEADER,
+    description="Activation key for setting password"
+)
+
+set_password_params = [
+    activation_key_in_header,
+]
+
 user_list_params = [
     organization_params_in_header,
     OpenApiParameter("email",  OpenApiTypes.STR,OpenApiParameter.QUERY),

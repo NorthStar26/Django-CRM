@@ -1,9 +1,17 @@
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter
+from drf_spectacular.openapi import OpenApiTypes
+from companies.models import CompanyProfile
+from contacts.models import SALUTATION_CHOICES, LANGUAGE_CHOICES
 
-organization_params_in_header = organization_params_in_header = OpenApiParameter(
-    "org", OpenApiTypes.STR, OpenApiParameter.HEADER
+
+organization_params_in_header = OpenApiParameter(
+    name="org",
+    description="Organization ID",
+    required=True,
+    type=OpenApiTypes.UUID,
+    location=OpenApiParameter.HEADER,
 )
+
 
 organization_params = [
     organization_params_in_header,
@@ -11,51 +19,62 @@ organization_params = [
 
 contact_list_get_params = [
     organization_params_in_header,
-    OpenApiParameter("name", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("city", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("assigned_to", OpenApiTypes.STR,OpenApiParameter.QUERY),
+    OpenApiParameter(
+        name="name",
+        description="Search by name",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+    ),
+    OpenApiParameter(
+        name="email",
+        description="Search by email",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+    ),
+    OpenApiParameter(
+        name="company",
+        description="Filter by company ID",
+        required=False,
+        type=OpenApiTypes.UUID,
+        location=OpenApiParameter.QUERY,
+    ),
+    OpenApiParameter(
+        name="company_name",
+        description="Filter by company name",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+    ),
+    OpenApiParameter(
+        name="department",
+        description="Filter by department",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY,
+    ),
+
+
+    OpenApiParameter(
+        name="sort_by",
+        description="Field to sort by (e.g. department, first_name, last_name)",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY
+    ),
+    OpenApiParameter(
+        name="sort_order",
+        description="Sort order: asc or desc",
+        required=False,
+        type=OpenApiTypes.STR,
+        location=OpenApiParameter.QUERY
+    ),
+
 ]
+
 
 contact_create_post_params = [
     organization_params_in_header,
-    OpenApiParameter(
-        "salutation", OpenApiParameter.QUERY, OpenApiTypes.STR
-    ),
-    OpenApiParameter(
-        "first_name", OpenApiParameter.QUERY, OpenApiTypes.STR
-    ),
-    OpenApiParameter(
-        "last_name", OpenApiParameter.QUERY, OpenApiTypes.STR
-    ),
-    OpenApiParameter(
-        "date_of_birth",
-        OpenApiParameter.QUERY,
-        OpenApiTypes.STR
-    ),
-    OpenApiParameter("organization", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter(
-        "title", OpenApiParameter.QUERY, OpenApiTypes.STR
-    ),
-    OpenApiParameter("primary_email", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("secondary_email", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("mobile_number", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("secondary_number", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("department", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("language", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("do_not_call", OpenApiParameter.QUERY, OpenApiTypes.BOOL),
-    OpenApiParameter(
-        "address_line", OpenApiParameter.QUERY, OpenApiTypes.STR
-    ),
-    OpenApiParameter("street", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("city", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("state", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("pincode", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("country", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("description", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("linked_in_url", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("facebook_url", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("twitter_username", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("teams", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("assigned_to", OpenApiTypes.STR,OpenApiParameter.QUERY),
-    OpenApiParameter("contact_attachment", OpenApiParameter.QUERY, OpenApiTypes.BINARY),
+
 ]

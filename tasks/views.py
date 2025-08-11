@@ -38,7 +38,7 @@ class TaskListView(APIView, LimitOffsetPagination):
         queryset = self.model.objects.filter(org=self.request.profile.org).order_by("-id")
         accounts = Account.objects.filter(org=self.request.profile.org)
         contacts = Contact.objects.filter(org=self.request.profile.org)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             queryset = queryset.filter(
                 Q(assigned_to__in=[self.request.profile])
                 | Q(created_by=self.request.profile.user)
@@ -142,7 +142,7 @@ class TaskDetailView(APIView):
         ]
         if self.request.profile == self.task_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile.id not in user_assgn_list:
                 return Response(
                     {
@@ -157,19 +157,19 @@ class TaskDetailView(APIView):
 
         assigned_data = self.task_obj.assigned_to.values("id", "user__email")
 
-        if self.request.profile.is_admin or self.request.profile.role == "ADMIN":
+        if self.request.profile.is_admin or self.request.profile.role in ["ADMIN", "MANAGER"]:
             users_mention = list(
                 Profile.objects.filter(is_active=True, org=self.request.profile.org).values(
                     "user__email"
                 )
             )
         elif self.request.profile != self.task_obj.created_by:
-            users_mention = [{"username": self.task_obj.created_by.user.email}]
+            users_mention = [{"username": self.task_obj.created_by.email}]
         else:
             users_mention = list(
                 self.task_obj.assigned_to.all().values("user__email")
             )
-        if self.request.profile.role == "ADMIN" or self.request.profile.is_admin:
+        if self.request.profile.role in ["ADMIN", "MANAGER"] or self.request.profile.is_admin:
             users = Profile.objects.filter(
                 is_active=True, org=self.request.profile.org
             ).order_by("user__email")
@@ -180,7 +180,7 @@ class TaskDetailView(APIView):
 
         if self.request.profile == self.task_obj.created_by:
             user_assgn_list.append(self.request.profile.id)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if self.request.profile.id not in user_assgn_list:
                 return Response(
                     {
@@ -224,7 +224,7 @@ class TaskDetailView(APIView):
         params = request.data
         context = {}
         self.task_obj = Task.objects.get(pk=pk)
-        if self.request.profile.role != "ADMIN" and not self.request.profile.is_admin:
+        if self.request.profile.role not in ["ADMIN", "MANAGER"] and not self.request.profile.is_admin:
             if not (
                 (self.request.profile == self.task_obj.created_by)
                 or (self.request.profile in self.task_obj.assigned_to.all())
@@ -316,7 +316,7 @@ class TaskDetailView(APIView):
     def delete(self, request, pk, **kwargs):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):
@@ -346,7 +346,7 @@ class TaskCommentView(APIView):
         params = request.data
         obj = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == obj.commented_by
         ):
@@ -377,7 +377,7 @@ class TaskCommentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.get_object(pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.commented_by
         ):
@@ -406,7 +406,7 @@ class TaskAttachmentView(APIView):
     def delete(self, request, pk, format=None):
         self.object = self.model.objects.get(pk=pk)
         if (
-            request.profile.role == "ADMIN"
+            request.profile.role in ["ADMIN", "MANAGER"]
             or request.profile.is_admin
             or request.profile == self.object.created_by
         ):

@@ -20,3 +20,4 @@ Redis
 django-phonenumber-field
 arrow
 phonenumbers
+django-ratelimit

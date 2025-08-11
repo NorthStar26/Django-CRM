@@ -11,11 +11,11 @@ from common.utils import CASE_TYPE, PRIORITY_CHOICE, STATUS_CHOICE
 from contacts.models import Contact
 from planner.models import PlannerEvent as Event
 from teams.models import Teams
-
+from opportunity.models import Opportunity
 
 class Case(BaseModel):
     name = models.CharField(pgettext_lazy("Name of the case", "Name"), max_length=64)
-    status = models.CharField(choices=STATUS_CHOICE, max_length=64)
+    # status = models.CharField(choices=STATUS_CHOICE, max_length=64)
     priority = models.CharField(choices=PRIORITY_CHOICE, max_length=64)
     case_type = models.CharField(
         choices=CASE_TYPE, max_length=255, blank=True, null=True, default=""
@@ -38,9 +38,36 @@ class Case(BaseModel):
     is_active = models.BooleanField(default=False)
     teams = models.ManyToManyField(Teams, related_name="cases_teams")
     org = models.ForeignKey(
-        Org, on_delete=models.SET_NULL, null=True, blank=True, related_name="case_org"
+        Org, on_delete=models.SET_NULL, null=True, blank=True, related_name="cases"
     )
 
+
+    contract = models.FileField(
+        _("Contract"),
+        upload_to="cases/contracts/",
+        blank=True,
+        null=True,
+        help_text=_("Contract document")
+
+    )
+    reason = models.TextField(
+        _("Reason"),
+        blank=True,
+        null=True,
+        help_text=_("Reason for closing (won/lost details)")
+        )
+    status = models.BooleanField(
+        _("Status"),
+        default=True,
+        help_text=_("True if Won, False if Lost")
+    )
+    opportunity = models.OneToOneField(
+        Opportunity,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="lost_feedback_case"
+    )
     class Meta:
         verbose_name = "Case"
         verbose_name_plural = "Cases"
@@ -48,7 +75,7 @@ class Case(BaseModel):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return f"{self.name}"
+        return f"Case for {self.opportunity.name} - {'Won' if self.status else 'Lost'}"
 
     @property
     def get_team_users(self):
